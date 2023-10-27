@@ -753,7 +753,7 @@ print(check_frequencies(intervente('twolinks', d['twolinks'], "y")), "- frequenc
 
 print()
 print()
-'''
+
 print(d['collider1'], "- collider")
 print(check_frequencies(d['collider1']), "- frequencies")
 
@@ -764,7 +764,7 @@ print(check_frequencies(intervente('collider1', d['collider1'], "y")), "- freque
 
 # print(intervente('collider', d['collider1'], "z"), "- orange distribution (Z fixed)")
 # print(check_frequencies(intervente('collider', d['collider1'], "z")), "- frequencies again")
-'''
+
 print()
 print()
 
