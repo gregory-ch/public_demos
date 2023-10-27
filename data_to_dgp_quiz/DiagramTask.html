@@ -1,0 +1,1571 @@
+{{ block styles }}
+<style>
+    .otree-body {
+        font: 14px helvetica neue, helvetica, arial, sans-serif;
+        max-width: 600px
+    }
+
+
+    #cy {
+        margin-left: auto;
+        margin-right: auto;
+        width: 400px;
+        height: 200px;
+        display: block;
+    }
+
+
+    #info {
+        color: #c88;
+        font-size: 2em;
+        width: 800px;
+        height: 200px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+</style>
+<style>
+    .slidecontainer {
+        width: 100%;
+    }
+
+    .slider {
+        -webkit-appearance: none;
+        width: 100%;
+        height: 25px;
+        background: #d3d3d3;
+        outline: none;
+        opacity: 0.5;
+        -webkit-transition: .2s;
+        transition: opacity .2s;
+    }
+
+    .slider:hover {
+        opacity: 0.7;
+    }
+
+    .slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 25px;
+        height: 25px;
+        background: #4CAF50;
+        cursor: pointer;
+    }
+
+    .slider::-moz-range-thumb {
+        width: 25px;
+        height: 25px;
+        background: #4CAF50;
+        cursor: pointer;
+    }
+</style>
+{{ endblock }}
+
+
+{{ block title }}
+<dl class="lng-Title" style="text-align:center">You can read the observation records in the following tables:</dl>
+{{ endblock }}
+
+
+{{ block content }}
+<div class="lang-container" style="text-align:right">
+    <table>
+        <col width="81%">
+        <col width="19%">
+        <tr>
+            <td></td>
+            <td style="border-radius: 8px; border: 1px solid #000; display: block; height: 34px">
+                <link rel="stylesheet"
+                      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0"/>
+                <span class="material-symbols-outlined" style="position: relative; top: 3px;">language</span>
+                <select class="change-lang" style="border: 1px solid white; position: relative; bottom: 3px;">
+                    <option value="en">Eng</option>
+                    <option value="ge">Ger</option>
+                    <option value="ru">Rus</option>
+                </select>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<br>
+
+
+<div class="tg-wrap" style="border-radius: 50px 50px 0 0; background-color: #f2f2f2;">
+    <table id="menu" class="table" style="
+  margin: auto; width:60; text-align: center; font-size: 12px; line-height: 0.8">
+        <col width="10%">
+        <col width="30%">
+        <col width="30%">
+        <col width="30%">
+        <tbody>
+        <tr>
+            <td class="searchable3"></td>
+            <td class="searchable3">
+
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+                <button style="display: none; border-radius: 10px 10px 10px 10px;" id="myButtonX"
+                        onclick="toggleX(this);" type="button" class="btn btn-outline-dark btn-sm">
+                    Force X=1 (DO X)    <!-- this text is optional -->
+                </button>
+
+
+                <script>
+
+
+                    let xfilterclick = js_vars.xfilterclick || 0;
+                    let x0filterclick = js_vars.x0filterclick || 0;
+                    let yfilterclick = js_vars.yfilterclick || 0;
+                    let y0filterclick = js_vars.y0filterclick || 0;
+                    let zfilterclick = js_vars.zfilterclick || 0;
+                    let z0filterclick = js_vars.z0filterclick || 0;
+                    let xifilterclick = js_vars.xifilterclick || 0;
+                    let x0ifilterclick = js_vars.x0ifilterclick || 0;
+                    let yifilterclick = js_vars.yifilterclick || 0;
+                    let y0ifilterclick = js_vars.y0ifilterclick || 0;
+                    let zifilterclick = js_vars.zifilterclick || 0;
+                    let z0ifilterclick = js_vars.z0ifilterclick || 0;
+                    let showintclick = js_vars.showintclick || 0;
+                    let showobsclick = js_vars.showobsclick || 0;
+
+                    let seed = js_vars.seed;
+                    let treatment = js_vars.treatment;
+                    let dgptype = js_vars.dgptype;
+                    console.log(dgptype)
+                    function minifuncy(number, tr, type) {
+                        console.log(tr, type)
+                        if (tr && (type == 'onelink' || type == 'twolinks' || type == 'collider1')){
+                            if (number === 3 || number === 5) {return "Z"}
+                            if (number === 0 || number === 1) {return "X"}
+                            if (number === 2 || number === 4) {return "Y"}
+                        }
+                        else{
+                            if (number === 1 || number === 4) {return "Z"}
+                            if (number === 0 || number === 5) {return "Y"}
+                            if (number === 2 || number === 3) {return "X"}
+                        }
+                    }
+
+                    function minifuncx(number) {
+                        if (number == 3 || number == 5) {
+                            return "Z"
+                        }
+                        if (number == 0 || number == 1) {
+                            return "X"
+                        }
+                        if (number == 2 || number == 4) {
+                            return "Y"
+                        }
+                    }
+
+                    function minifuncz(number) {
+                        if (number == 0 || number == 2) {
+                            return "Z"
+                        }
+                        if (number == 4 || number == 5) {
+                            return "X"
+                        }
+                        if (number == 1 || number == 3) {
+                            return "Y"
+                        }
+                    }
+
+
+                    butx = document.getElementById("myButtonX");
+                    butx.innerText = 'Force X=1 (DO X)';
+                    //if (minifuncx(seed) == 'X' || minifuncy(seed) == 'X' || minifuncz(seed) == 'X'){butx.style.display = "inline-block";}
+                    if (minifuncy(seed, treatment, dgptype) == 'X') {
+                        butx.style.display = "inline-block";
+                    }
+                </script>
+
+
+                <div class="input-group"><span class="input-group-addon"></span>
+            </td>
+            <td class="searchable3">
+
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+                <button style="display: none; border-radius: 10px 10px 10px 10px;" id="myButtonY"
+                        onclick="toggleY(this);" type="button" class="btn btn-outline-dark btn-sm">
+                    Force Y=1 (DO Y)    <!-- this text is optional -->
+                </button>
+
+                <script>
+                    buty = document.getElementById("myButtonY");
+                    buty.innerText = 'Force Y=1 (DO Y)';
+                    //if (minifuncx(seed) == 'Y' || minifuncy(seed) == 'Y' || minifuncz(seed) == 'Y'){buty.style.display = "inline-block";}
+                    if (minifuncy(seed, treatment, dgptype) == 'Y') {
+                        buty.style.display = "inline-block";
+                    }
+
+                </script>
+
+                <div class="input-group"><span class="input-group-addon"></span>
+            </td>
+
+            <td class="searchable3">
+
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+                <button style="display: none; border-radius: 10px 10px 10px 10px;" id="myButtonZ"
+                        onclick="toggleZ(this);" type="button" class="btn btn-outline-dark btn-sm">
+                    Force Z=1 (DO Z)    <!-- this text is optional -->
+                </button>
+
+                <script>
+                    butz = document.getElementById("myButtonZ");
+                    butz.innerText = 'Force Z=1 (DO Z)';
+                    //if (minifuncx(seed) == 'Z' || minifuncy(seed) == 'Z' || minifuncz(seed) == 'Z'){butz.style.display = "inline-block";}
+                    if (minifuncy(seed, treatment, dgptype) == 'Z') {
+                        butz.style.display = "inline-block";
+                    }
+
+                </script>
+
+                <div class="input-group"><span class="input-group-addon"></span>
+            </td>
+        </tr>
+        <tr>
+
+        </tbody>
+    </table>
+</div>
+
+<table id="interv" hidden="true" class="table table-striped"
+       style="width:60; text-align: center; font-size: 12px; line-height: 0.8;">
+    <col width="10%">
+    <col width="30%">
+    <col width="30%">
+    <col width="30%">
+
+    <tbody class="searchable2">
+    <tr>
+        <td class="searchable2"></td>
+        <td class="searchable2">X
+            <br/>
+            <label><input id="filterx_i" type="checkbox">1</label>
+            <label><input id="filterx0_i" type="checkbox">0</label>
+            <div class="input-group"><span class="input-group-addon"></span>
+
+
+        </td>
+        <td class="searchable2">Y
+            <br/>
+            <label><input id="filtery_i" type="checkbox">1</label>
+            <label><input id="filtery0_i" type="checkbox">0</label>
+            <div class="input-group"><span class="input-group-addon"></span>
+
+
+        </td>
+        <td class="searchable2">Z
+            <br/>
+            <label><input id="filterz_i" type="checkbox">1</label>
+            <label><input id="filterz0_i" type="checkbox">0</label>
+            <div class="input-group"><span class="input-group-addon"></span>
+
+
+        </td>
+    </tr>
+    {% for i, x, y, z in datasetint %}
+    <tr>
+        <td>{{ i }}</td>
+        <td>{{ x }}</td>
+        <td>{{ y }}</td>
+        <td>{{ z }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<table id="observ" class="table table-striped" style="width:60; text-align: center; font-size: 12px; line-height: 0.8;">
+    <col width="10%">
+    <col width="30%">
+    <col width="30%">
+    <col width="30%">
+
+    <tbody class="searchable">
+    <tr>
+        <td class="searchable"></td>
+        <td class="searchable">X
+            <br/>
+            <label><input id="filterx" type="checkbox">1</label>
+            <label><input id="filterx0" type="checkbox">0</label>
+            <div class="input-group"><span class="input-group-addon"></span>
+
+
+        </td>
+        <td class="searchable">Y
+            <br/>
+            <label><input id="filtery" type="checkbox">1</label>
+            <label><input id="filtery0" type="checkbox">0</label>
+
+
+        </td>
+        <td class="searchable">Z
+            <br/>
+            <label><input id="filterz" type="checkbox">1</label>
+            <label><input id="filterz0" type="checkbox">0</label>
+            <div class="input-group"><span class="input-group-addon"></span>
+
+
+        </td>
+    </tr>
+    {% for i, x, y, z in datasetobs %}
+    <tr>
+        <td>{{ i }}</td>
+        <td>{{ x }}</td>
+        <td>{{ y }}</td>
+        <td>{{ z }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+
+<div class="tg-wrap">
+    <table id="freqs" class="table table-striped" style="
+margin: auto; width:60; text-align: center; font-size: 12px; line-height: 0.8;">
+        <col width="10%">
+        <col width="30%">
+        <col width="30%">
+        <col width="30%">
+        <tbody>
+
+        {% for i in frequenciesobs %}
+        <td class="searchable3" style="text-align: center">{{ i }}</td>
+        {% endfor %}
+        </tr>
+        <tr>
+
+        </tbody>
+
+    </table>
+</div>
+
+<div class="tg-wrap">
+    <table id="freqsint" hidden="true" class="table table-striped" style="
+    margin: auto; width:60; text-align: center; font-size: 12px; line-height: 0.8;">
+        <col width="10%">
+        <col width="30%">
+        <col width="30%">
+        <col width="30%">
+        <tbody>
+
+        {% for i in frequenciesint %}
+        <td class="searchable3" style="text-align: center">{{ i }}</td>
+        {% endfor %}
+        </tr>
+        <tr>
+
+        </tbody>
+    </table>
+</div>
+
+
+<table id="pcharts" class="table" style="border-radius: 0 0 50px 50px; background-color: #f2f2f2; border: white">
+    <col width="10%">
+    <col width="30%">
+    <col width="30%">
+    <col width="30%">
+    <tr>
+        <td id="colors" style="font-size: 12px; line-height: 0.8; position: relative; right: -15px; bottom: -5px"></td>
+        <td>
+            <center>
+                <div id="piechart1"></div>
+            </center>
+        </td>
+        <td>
+            <center>
+                <div id="piechart2"></div>
+            </center>
+        </td>
+        <td>
+            <center>
+                <div id="piechart3"></div>
+            </center>
+        </td>
+    </tr>
+</table>
+
+<table id="pchartsint" class="table" style="border-radius: 0 0 50px 50px; background-color: #f2f2f2; border: white">
+    <col width="10%">
+    <col width="30%">
+    <col width="30%">
+    <col width="30%">
+    <tr>
+        <td id="colorsint"
+            style="font-size: 12px; line-height: 0.8; position: relative; right: -15px; bottom: -5px"></td>
+        <td>
+            <center>
+                <div id="piechart1int"></div>
+            </center>
+        </td>
+        <td>
+            <center>
+                <div id="piechart2int"></div>
+            </center>
+        </td>
+        <td>
+            <center>
+                <div id="piechart3int"></div>
+            </center>
+        </td>
+    </tr>
+</table>
+
+<br>
+
+<div>
+    <p class="lng-DtText">Please, fill out the form if you assume any relationships between X, Y and Z
+    </p>
+</div>
+
+<script>
+    var freqs = document.getElementById('freqs');
+    var freqsint = document.getElementById('freqsint');
+    var freqsintjs = js_vars.frequenciesint;
+    var freqsobs = js_vars.frequenciesobs;
+    var flag = 0;
+    document.getElementById('colors').innerHTML = '<div id="rectangle" style="width: 14px; height: 14px; background: skyblue">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:1</div><br><div id="rectangle" style="width: 14px; height: 14px; background: grey">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:0</div>'
+    document.getElementById('colorsint').innerHTML = '<div id="rectangle" style="width: 14px; height: 14px; background: skyblue">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:1</div><br><div id="rectangle" style="width: 14px; height: 14px; background: grey">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:0</div>'
+
+    //document.getElementById('colors').innerHTML = "🟦-1 <br> ⬛️-0"
+
+</script>
+
+
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+<script type="text/javascript">
+    google.charts.load('current', {'packages': ['corechart']});
+    google.charts.setOnLoadCallback(drawChartobs);
+
+    function drawChartobs() {
+
+        var data1 = google.visualization.arrayToDataTable([
+            ['Num', 'Occurrence'],
+            ['1', Number(freqs.rows[0].cells[1].innerText.replace(/\,/g, '.'))],
+            ['0', 1 - Number(freqs.rows[0].cells[1].innerText.replace(/\,/g, '.'))]
+        ]);
+
+        var data2 = google.visualization.arrayToDataTable([
+            ['Num', 'Occurrence'],
+            ['1', Number(freqs.rows[0].cells[2].innerText.replace(/\,/g, '.'))],
+            ['0', 1 - Number(freqs.rows[0].cells[2].innerText.replace(/\,/g, '.'))]
+        ]);
+
+        var data3 = google.visualization.arrayToDataTable([
+            ['Num', 'Occurrence'],
+            ['1', Number(freqs.rows[0].cells[3].innerText.replace(/\,/g, '.'))],
+            ['0', 1 - Number(freqs.rows[0].cells[3].innerText.replace(/\,/g, '.'))]
+        ]);
+
+        var options = {
+            width: 50,
+            height: 50,
+            tooltip: {trigger: 'none'},
+            legend: 'none',
+            backgroundColor: 'transparent',
+            pieSliceText: 'none',
+            slices: {
+                0: {color: 'grey'},
+                1: {color: 'skyblue'}
+            },
+            reverseCategories: true
+            //chartArea: {left:'50%'}
+        };
+
+        var chart1 = new google.visualization.PieChart(document.getElementById('piechart1'));
+        var chart2 = new google.visualization.PieChart(document.getElementById('piechart2'));
+        var chart3 = new google.visualization.PieChart(document.getElementById('piechart3'));
+
+        chart1.draw(data1, options);
+        chart2.draw(data2, options);
+        chart3.draw(data3, options);
+    }
+</script>
+
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+<script type="text/javascript">
+    google.charts.load('current', {'packages': ['corechart']});
+    google.charts.setOnLoadCallback(drawChartint);
+
+    function drawChartint() {
+
+        var data1 = google.visualization.arrayToDataTable([
+            ['Num', 'Occurrence'],
+            ['1', Number(freqsint.rows[0].cells[1].innerText.replace(/\,/g, '.'))],
+            ['0', 1 - Number(freqsint.rows[0].cells[1].innerText.replace(/\,/g, '.'))]
+        ]);
+
+        var data2 = google.visualization.arrayToDataTable([
+            ['Num', 'Occurrence'],
+            ['1', Number(freqsint.rows[0].cells[2].innerText.replace(/\,/g, '.'))],
+            ['0', 1 - Number(freqsint.rows[0].cells[2].innerText.replace(/\,/g, '.'))]
+        ]);
+
+        var data3 = google.visualization.arrayToDataTable([
+            ['Num', 'Occurrence'],
+            ['1', Number(freqsint.rows[0].cells[3].innerText.replace(/\,/g, '.'))],
+            ['0', 1 - Number(freqsint.rows[0].cells[3].innerText.replace(/\,/g, '.'))]
+        ]);
+
+        var options = {
+            width: 50,
+            height: 50,
+            tooltip: {trigger: 'none'},
+            legend: 'none',
+            backgroundColor: 'transparent',
+            pieSliceText: 'none',
+            slices: {
+                0: {color: 'grey'},
+                1: {color: 'skyblue'}
+            },
+            reverseCategories: true
+            //chartArea: {left:'50%'}
+        };
+
+        var chart1int = new google.visualization.PieChart(document.getElementById('piechart1int'));
+        var chart2int = new google.visualization.PieChart(document.getElementById('piechart2int'));
+        var chart3int = new google.visualization.PieChart(document.getElementById('piechart3int'));
+
+        chart1int.draw(data1, options);
+        chart2int.draw(data2, options);
+        chart3int.draw(data3, options);
+    }
+
+
+    function getRandomIntInclusive(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1) + min); // The maximum is inclusive and the minimum is inclusive
+    }
+
+    confnum = getRandomIntInclusive(0, 20) * 5
+
+
+</script>
+
+
+<div id="cy"></div>
+
+<br>
+
+<input hidden id='stored' name="stored"
+       value='[{"counter": 0, "weight": 0, "id": "XY", "source": "X", "target": "Y", "label": ""}, {"counter": 0, "weight": 0, "id": "YX", "source": "Y", "target": "X", "label": ""}, {"counter": 0, "weight": 0, "id": "YZ", "source": "Y", "target": "Z", "label": ""}, {"counter": 0, "weight": 0, "id": "XZ", "source": "X", "target": "Z", "label": ""}, {"counter": 0, "weight": 0, "id": "ZY", "source": "Z", "target": "Y", "label": ""}, {"counter": 0, "weight": 0, "id": "ZX", "source": "Z", "target": "X", "label": ""}]'>
+
+<div><p class="lng-confstart">Please choose how confident you are using slider</p></div>
+
+<input color="yellow-300" id='conf_bid' class="form-range" type="range" name="conf_bid" min="0" max="100" step="5">
+
+</div>
+
+<script>
+    document.getElementById("conf_bid").value = confnum
+</script>
+
+<input hidden="hidden" id='conf_init' name="conf_init">
+
+<script>
+    document.getElementById("conf_init").value = confnum
+</script>
+
+<div style="text-align: center; font-size: 16px; line-height: 0.8"><p class="lng-conflevel"> Current confidience:</p> <b
+        id="result"> </b></div>
+<p></p>
+
+<input hidden="hidden" id='buttons' name="buttons"
+       value='[0,0,0,0,0,0,0,0,0,0,0,0,0,0]'>
+
+
+<script>
+
+    $(document).ready(function () {
+        // Read value on page load
+        $("#result").html($("#conf_bid").val());
+
+        // Read value on change
+        $("#conf_bid").change(function () {
+            $("#result").html($(this).val());
+        });
+    });
+
+</script>
+{{ formfield_errors 'conf_init'}}
+{{ formfield_errors 'stored' }}
+{{ formfield_errors 'conf_bid' }}
+{{ formfield_errors 'buttons' }}
+<br>
+{{ next_button }}
+
+
+<script src="{{ static 'global/cytoscape.min.js' }}"></script>
+
+<script src=”https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js”></script>
+
+<script src="{{ static  'data_to_dgp/lang.js'  }}"></script>
+
+<script src="{{ static  'data_to_dgp/utils.js'  }}"></script>
+
+<script>
+    slider = document.getElementById('fader');
+    document.getElementById('pchartsint').hidden = true;
+    observ = document.getElementById('observ');
+    interv = document.getElementById('interv');
+    intervx = document.getElementById('intervx');
+    intervz = document.getElementById('intervz');
+
+    function refresh_values_in_buttons() {
+        document.getElementById('buttons').value = "[" + xfilterclick +
+            "," + x0filterclick +
+            "," + yfilterclick +
+            "," + y0filterclick +
+            "," + zfilterclick +
+            "," + z0filterclick +
+            "," + xifilterclick +
+            "," + x0ifilterclick +
+            "," + yifilterclick +
+            "," + y0ifilterclick +
+            "," + zifilterclick +
+            "," + z0ifilterclick +
+            "," + showintclick +
+            "," + showobsclick + "]"
+    }
+
+    function crfunc(b1, b2) {
+        if (b1) {
+            return "0";
+        } else if (b2) {
+            return "1";
+        } else {
+            return "-1";
+        }
+    }
+
+
+    var cy = cytoscape({
+        container: document.getElementById('cy'),
+
+        boxSelectionEnabled: false,
+        autounselectify: true,
+        wheelSensitivity: 0.01,
+
+        style: cytoscape.stylesheet()
+
+            .selector('node')
+            .css({
+                'content': 'data(name)',
+                'text-valign': 'center',
+                'color': 'black',
+                // 'text-outline-width': 2,
+                // 'text-outline-color': undefined,
+                'background-color': '#666'
+            })
+            .selector(':selected')
+            .css({
+                'background-color': 'black',
+                'line-color': 'black',
+                'target-arrow-color': 'black',
+                'source-arrow-color': 'black',
+                'text-outline-color': 'black'
+            })
+            .selector('edge')
+            .css({
+                'width': 2,
+                'line-color': '#ccc',
+                'target-arrow-color': 'black',
+                'target-arrow-shape': 'triangle',
+                'curve-style': 'bezier',
+                'line-style': 'dashed'
+            })
+            .selector('edge[label]')
+            .css({
+                "label": "data(label)",
+                "width": 3
+            })
+            .selector('layout')
+            .css({
+                'name': 'grid',
+                'rows': 1,
+                'cols': 2,
+                'padding': 15,
+            }),
+
+
+        elements: {
+            nodes: [
+                // { style: {'border-color': "red"}, data: {counter:0, id: 'a', name: '-', } },
+                {data: {counter: 0, id: 'X', name: 'X',}, style: {'background-color': '#c3cec0'}},
+                {data: {counter: 0, id: 'Y', name: 'Y',}, style: {'background-color': '#c3cec0'}},
+                {data: {counter: 0, id: 'Z', name: 'Z',}, style: {'background-color': '#c3cec0'}},
+                // { data: {counter:0, id: 'Z', name: '-', } }
+            ],
+
+            edges: [
+                {data: {counter: 0, weight: 0, id: 'XY', source: 'X', target: 'Y', label: ""}},
+                {data: {counter: 0, weight: 0, id: 'YX', source: 'Y', target: 'X', label: ""}},
+                {data: {counter: 0, weight: 0, id: 'YZ', source: 'Y', target: 'Z', label: ""}},
+                {data: {counter: 0, weight: 0, id: 'XZ', source: 'X', target: 'Z', label: ""}},
+                {data: {counter: 0, weight: 0, id: 'ZY', source: 'Z', target: 'Y', label: ""}},
+                {data: {counter: 0, weight: 0, id: 'ZX', source: 'Z', target: 'X', label: ""}},
+                // { data: {counter:0, weight:0, id: 'bc', source: 'Y', target: 'Z', label: "-"} },
+            ]
+        },
+    });
+
+
+    var layout = cy.layout({
+        name: 'circle'
+    });
+    layout.run();
+
+
+    const edge_states = ["", ""];
+    const edge_colours = ["#ccc", "#000"]
+    const edge_type = ['dashed', 'solid']
+    const edge_weight = [2, 0]
+
+
+    cy.on('tap', 'edge', function (evt) {
+        var ele = evt.target;
+        var edges = cy.edges();
+        var form_data = [];
+        // console.log(iterator(numbers, ele.data('counter'))[0] );
+        ele.data('label', iterator(edge_states, ele.data('counter'))[0]);
+        ele.data('counter', iterator(edge_states, ele.data('counter'))[1]);
+        ele.data('weight', iterator(edge_weight, ele.data('counter'))[0]);
+        ele.style('line-style', edge_type[ele.data('counter')]);
+        ele.style('line-color', edge_colours[ele.data('counter')]);
+        for (var i = 0; i < edges.length; i++) {
+            form_data.push(edges[i]._private.data);
+        }
+        console.log(form_data);
+
+
+        liveSend(form_data);
+        // sendValue(form_data)
+        form_data = [];
+
+
+    });
+
+    function liveRecv(data) {
+        console.log(data);
+        // forminputs.stored.value = data; // for Gregory
+        formInputs.stored.value = data; // for server setting / for MaxY
+    }
+
+    function iterator(array, i) {
+        var index = (i + 1) % array.length;
+        var value = array[index];
+        return [value, index];
+    };
+
+
+    function sum(array) {
+        return array.reduce((sum, number) => Math.round(sum) + Math.round(number), 0)
+    }
+
+
+    $(document).ready(function () {
+        (function ($) {
+            $('#filter').keyup(function () {
+
+                var rex = new RegExp($(this).val(), 'i');
+                $('.searchable tr').hide();
+                $('.searchable tr').filter(function () {
+                    return rex.test($(this).text());
+                }).show();
+
+            });
+
+
+            $('#filterx').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                xfilterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable tr').hide();
+                    document.getElementById('filterx0').checked = false;
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== "0" &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery').checked, document.getElementById('filtery0').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz').checked, document.getElementById('filterz0').checked))
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery').checked, document.getElementById('filtery0').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz').checked, document.getElementById('filterz0').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartobs();
+            });
+
+
+            $('#filterx0').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                x0filterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable tr').hide();
+                    document.getElementById('filterx').checked = false;
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== "1" &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery').checked, document.getElementById('filtery0').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz').checked, document.getElementById('filterz0').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery').checked, document.getElementById('filtery0').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz').checked, document.getElementById('filterz0').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartobs();
+            });
+
+
+            $('#filtery').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                yfilterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable tr').hide();
+                    document.getElementById('filtery0').checked = false;
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx').checked, document.getElementById('filterx0').checked) &&
+                            $(this).find('td').eq(2).text() !== "0" &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz').checked, document.getElementById('filterz0').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx').checked, document.getElementById('filterx0').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz').checked, document.getElementById('filterz0').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartobs();
+            });
+
+
+            $('#filtery0').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                y0filterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable tr').hide();
+                    document.getElementById('filtery').checked = false;
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx').checked, document.getElementById('filterx0').checked) &&
+                            $(this).find('td').eq(2).text() !== "1" &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz').checked, document.getElementById('filterz0').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx').checked, document.getElementById('filterx0').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz').checked, document.getElementById('filterz0').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartobs();
+            });
+
+
+            $('#filterz').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                zfilterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable tr').hide();
+                    document.getElementById('filterz0').checked = false;
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx').checked, document.getElementById('filterx0').checked) &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery').checked, document.getElementById('filtery0').checked) &&
+                            $(this).find('td').eq(3).text() !== "0");
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx').checked, document.getElementById('filterx0').checked) &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery').checked, document.getElementById('filtery0').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartobs();
+            });
+
+
+            $('#filterz0').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                z0filterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable tr').hide();
+                    document.getElementById('filterz').checked = false;
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx').checked, document.getElementById('filterx0').checked) &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery').checked, document.getElementById('filtery0').checked) &&
+                            $(this).find('td').eq(3).text() !== "1");
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx').checked, document.getElementById('filterx0').checked) &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery').checked, document.getElementById('filtery0').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartobs();
+            });
+
+        }(jQuery));
+    });
+
+
+    $(document).ready(function () {
+        (function ($) {
+            $('#filterx_i').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                xifilterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable2 tr').hide();
+                    document.getElementById('filterx0_i').checked = false;
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== "0" &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery_i').checked, document.getElementById('filtery0_i').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz_i').checked, document.getElementById('filterz0_i').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery_i').checked, document.getElementById('filtery0_i').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz_i').checked, document.getElementById('filterz0_i').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartint();
+            });
+
+
+            $('#filterx0_i').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                x0ifilterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable2 tr').hide();
+                    document.getElementById('filterx_i').checked = false;
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== "1" &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery_i').checked, document.getElementById('filtery0_i').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz_i').checked, document.getElementById('filterz0_i').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery_i').checked, document.getElementById('filtery0_i').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz_i').checked, document.getElementById('filterz0_i').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartint();
+            });
+
+            $('#filtery_i').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                yifilterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable2 tr').hide();
+                    document.getElementById('filtery0_i').checked = false;
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx_i').checked, document.getElementById('filterx0_i').checked) &&
+                            $(this).find('td').eq(2).text() !== "0" &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz_i').checked, document.getElementById('filterz0_i').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx_i').checked, document.getElementById('filterx0_i').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz_i').checked, document.getElementById('filterz0_i').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartint();
+            });
+
+            $('#filtery0_i').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                y0ifilterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable2 tr').hide();
+                    document.getElementById('filtery_i').checked = false;
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx_i').checked, document.getElementById('filterx0_i').checked) &&
+                            $(this).find('td').eq(2).text() !== "1" &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz_i').checked, document.getElementById('filterz0_i').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx_i').checked, document.getElementById('filterx0_i').checked) &&
+                            $(this).find('td').eq(3).text() !== crfunc(document.getElementById('filterz_i').checked, document.getElementById('filterz0_i').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartint();
+            });
+
+
+            $('#filterz_i').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                zifilterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable2 tr').hide();
+                    document.getElementById('filterz0_i').checked = false;
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx_i').checked, document.getElementById('filterx0_i').checked) &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery_i').checked, document.getElementById('filtery0_i').checked) &&
+                            $(this).find('td').eq(3).text() !== "0");
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx_i').checked, document.getElementById('filterx0_i').checked) &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery_i').checked, document.getElementById('filtery0_i').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartint();
+            });
+
+
+            $('#filterz0_i').on('change', function () {
+                var out = [];
+                var tab = 0;
+                var filt_cut = 0;
+                z0ifilterclick += 1;
+                refresh_values_in_buttons();
+
+                if (this.checked) {
+                    $('.searchable2 tr').hide();
+                    document.getElementById('filterz_i').checked = false;
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx_i').checked, document.getElementById('filterx0_i').checked) &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery_i').checked, document.getElementById('filtery0_i').checked) &&
+                            $(this).find('td').eq(3).text() !== "1");
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+
+
+                } else {
+                    $('.searchable2 tr').filter(function () {
+                        filt_cut = ($(this).find('td').eq(1).text() !== crfunc(document.getElementById('filterx_i').checked, document.getElementById('filterx0_i').checked) &&
+                            $(this).find('td').eq(2).text() !== crfunc(document.getElementById('filtery_i').checked, document.getElementById('filtery0_i').checked));
+                        if (filt_cut) {
+                            out.push([$(this).find('td').eq(1).text(), $(this).find('td').eq(2).text(), $(this).find('td').eq(3).text()])
+                        }
+                        ;
+                        return (filt_cut)
+                    }).show();
+
+                    var tab = Array.from(out.slice(1, out.length));
+                    var transposed_tab = tab[0].map((_, colIndex) => tab.map(row => row[colIndex]));
+                    out2 = [sum(transposed_tab[0]) / transposed_tab[0].length, sum(transposed_tab[1]) / transposed_tab[1].length, sum(transposed_tab[2]) / transposed_tab[2].length];
+                    freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out2[0].toFixed(2) + '</td><td style="width:30%">' + out2[1].toFixed(2) + '</td><td style="width:30%">' + out2[2].toFixed(2) + '</td>';
+                }
+                drawChartint();
+            });
+
+        }(jQuery));
+    });
+
+
+    let toggleX = button => {
+        let element = document.getElementById("observ");
+        let hidden2 = element.getAttribute("hidden");
+        freqsint.hidden = false;
+        freqs.hidden = true;
+
+        if (minifuncy(seed, treatment, dgptype) == "X") {
+            var anoth_element = document.getElementById("interv");
+        }
+
+
+        //let anoth_element = document.getElementById("intervx");
+        let anoth_hidden = anoth_element.getAttribute("hidden");
+
+        if (hidden2) {
+            showobsclick += 1;
+            refresh_values_in_buttons();
+            element.removeAttribute("hidden");
+            anoth_element.setAttribute("hidden", "hidden");
+            button.innerText = 'Force X=1 (DO X)';
+            document.getElementById('pcharts').hidden = false;
+            document.getElementById('pchartsint').hidden = true;
+
+///////
+            if (minifuncy(seed, treatment, dgptype) == "Z") {
+                butz.style.display = "inline-block";
+            }
+
+            if (minifuncy(seed, treatment, dgptype) == "X") {
+                butx.style.display = "inline-block";
+            }
+///////
+        } else {
+            showintclick += 1;
+            refresh_values_in_buttons();
+            anoth_element.removeAttribute("hidden");
+            element.setAttribute("hidden", "hidden");
+            button.innerText = "Show Observational";
+            butz.style.display = "none";
+            butx.style.display = "none";
+            buty.innerText = "Show Observational";
+            buty.style.display = "inline-block";
+            document.getElementById('pchartsint').hidden = false;
+            document.getElementById('pcharts').hidden = true;
+
+            if (flag !== 0) {
+                xid = document.getElementById('freqsint')
+                out3 = [$(xid).find('td').eq(1).text(), $(xid).find('td').eq(2).text(), $(xid).find('td').eq(3).text()]
+                freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out3[0] + '</td><td style="width:30%">' + out3[1] + '</td><td style="width:30%">' + out3[2] + '</td>';  // если поставить здесь toFixed(2) то полетит кнопка
+            } else {
+                freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + freqsintjs[1] + '</td><td style="width:30%">' + freqsintjs[2] + '</td><td style="width:30%">' + freqsintjs[3] + '</td>';
+            }
+        }
+    }
+
+
+    let toggleY = button => {
+        let element = document.getElementById("observ");
+        let hidden2 = element.getAttribute("hidden");
+
+
+        let anoth_element = document.getElementById("interv");
+        let anoth_hidden = anoth_element.getAttribute("hidden");
+
+        if (hidden2) {
+            showobsclick += 1;
+            refresh_values_in_buttons();
+            element.removeAttribute("hidden");
+            anoth_element.setAttribute("hidden", "hidden");
+            button.innerText = 'Force Y=1 (DO Y)';
+            document.getElementById('pcharts').hidden = false;
+            document.getElementById('pchartsint').hidden = true;
+            freqsint.hidden = true;
+            freqs.hidden = false;
+            document.getElementById("interv").setAttribute("hidden", "hidden");
+
+            ids = document.getElementById('freqs')
+            out3 = [$(ids).find('td').eq(1).text(), $(ids).find('td').eq(2).text(), $(ids).find('td').eq(3).text()]
+            freqs.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out3[0] + '</td><td style="width:30%">' + out3[1] + '</td><td style="width:30%">' + out3[2] + '</td>';  //если здесь поставить .toFixed(2) то полетит кнопка
+
+            flag = 1;
+
+            butz.innerText = "Force Z=1 (DO Z)";
+            butx.innerText = "Force X=1 (DO X)";
+
+            if (minifuncy(seed, treatment, dgptype) == "Z") {
+                butz.style.display = "inline-block";
+            }
+
+            if (minifuncy(seed, treatment, dgptype) == "X") {
+                butx.style.display = "inline-block";
+            }
+
+///////
+            if (minifuncy(seed, treatment, dgptype) == "Y") {
+                buty.style.display = "inline-block";
+            } else {
+                buty.style.display = "none";
+            }
+///////
+        } else {
+            showintclick += 1;
+            refresh_values_in_buttons();
+            freqsint.hidden = false;
+            freqs.hidden = true;
+            anoth_element.removeAttribute("hidden");
+            element.setAttribute("hidden", "hidden");
+            button.innerText = "Show Observational";
+            butz.style.display = "none";
+            butx.style.display = "none";
+            document.getElementById('pchartsint').hidden = false;
+            document.getElementById('pcharts').hidden = true;
+
+            if (flag !== 0) {
+                xid = document.getElementById('freqsint')
+                out3 = [$(xid).find('td').eq(1).text(), $(xid).find('td').eq(2).text(), $(xid).find('td').eq(3).text()]
+                freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out3[0] + '</td><td style="width:30%">' + out3[1] + '</td><td style="width:30%">' + out3[2] + '</td>';
+            } else {
+                freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + freqsintjs[1] + '</td><td style="width:30%">' + freqsintjs[2] + '</td><td style="width:30%">' + freqsintjs[3] + '</td>';
+            }
+        }
+    }
+
+
+    let toggleZ = button => {
+        let element = document.getElementById("observ");
+        let hidden2 = element.getAttribute("hidden");
+        freqsint.hidden = false;
+        freqs.hidden = true;
+
+        if (minifuncy(seed, treatment, dgptype) == "Z") {
+            var anoth_element = document.getElementById("interv");
+        }
+
+        // let anoth_element = document.getElementById("intervz");
+        let anoth_hidden = anoth_element.getAttribute("hidden");
+        if (hidden2) {
+            showobsclick += 1;
+            refresh_values_in_buttons();
+            element.removeAttribute("hidden");
+            anoth_element.setAttribute("hidden", "hidden");
+            button.innerText = 'Force Z=1 (DO Z)';
+            document.getElementById('pcharts').hidden = false;
+            document.getElementById('pchartsint').hidden = true;
+
+///////
+            if (minifuncy(seed, treatment, dgptype) == "Z") {
+                butz.style.display = "inline-block";
+            }
+
+            if (minifuncy(seed, treatment, dgptype) == "X") {
+                butx.style.display = "inline-block";
+            }
+///////
+        } else {
+            showintclick += 1;
+            refresh_values_in_buttons();
+            anoth_element.removeAttribute("hidden");
+            element.setAttribute("hidden", "hidden");
+            button.innerText = "Show Observational";
+            butz.style.display = "none";
+            butx.style.display = "none";
+            buty.innerText = "Show Observational";
+            buty.style.display = "inline-block";
+            document.getElementById('pchartsint').hidden = false;
+            document.getElementById('pcharts').hidden = true;
+
+            if (flag !== 0) {
+                xid = document.getElementById('freqsint')
+                out3 = [$(xid).find('td').eq(1).text(), $(xid).find('td').eq(2).text(), $(xid).find('td').eq(3).text()]
+                freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + out3[0] + '</td><td style="width:30%">' + out3[1] + '</td><td style="width:30%">' + out3[2] + '</td>';         // если поставить здесь .toFixed(2) то полетит кнопка
+            } else {
+                freqsint.innerHTML = '<td style="width:10%">' + 'freq' + '</td><td style="width:30%">' + freqsintjs[1] + '</td><td style="width:30%">' + freqsintjs[2] + '</td><td style="width:30%">' + freqsintjs[3] + '</td>';
+            }
+        }
+    }
+
+
+    // var i = 1
+    // $('#myButton').on('click', function(event) {
+    //   i = i+1
+    //   if (i/2==0){document.getElementById("observ").style.visibility = "hidden";}
+    //   else {document.getElementById("observ").style.visibility = "visible" }
+    //    }
+    //   );
+
+</script>
+
+<div class="d-grid gap-2 col-6 mx-auto">
+    <a class="btn btn-outline-secondary" data-bs-toggle="collapse" href="#collapseExample" role="button"
+       aria-expanded="false" aria-controls="collapseExample">
+        SHOW INSTRUCTIONS
+    </a>
+</div>
+<div class="collapse" id="collapseExample">
+    <div id="presentation" style="text-align: center">
+        <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQfpoIUoXDowaEcC6CMAdC47D0FIHAROL9VAEuM55wTIt00YLXAiStHxL6C2j1aEBJdndxuwwzjw55R/embed?start=false&loop=true&delayms=60000"
+                frameborder="0" width="720" height="441" allowfullscreen="true" mozallowfullscreen="true"
+                webkitallowfullscreen="true"></iframe>
+    </div>
+</div>
+
+<script>
+    if (window.location.hash == '#en') {
+        document.getElementById("presentation").innerHTML = '<iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQuckfWy0p_GyPx5ENCW_-EN226UAqVcbrxA7GxTxjmhtZ-itGAz1PSgeqSDQgfyiWP-fovuntr5WxN/embed?start=false&loop=true&delayms=60000" frameBorder="0" width="720" height="441" allowFullScreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>'
+    } else if (window.location.hash == '#ru') {
+        document.getElementById("presentation").innerHTML = '<iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQfpoIUoXDowaEcC6CMAdC47D0FIHAROL9VAEuM55wTIt00YLXAiStHxL6C2j1aEBJdndxuwwzjw55R/embed?start=false&loop=true&delayms=60000" frameborder="0" width="720" height="441" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>'
+    } else if (window.location.hash == '#ge') {
+        document.getElementById("presentation").innerHTML = '<iframe src="https://docs.google.com/presentation/d/e/2PACX-1vRwuxhtykR989WCmpwYXDcjfLoRNWreTlX_et7ZGwomclVNuTrdK_d0Yw4qM5vpOjNWCg5ZAn9Kg30V/embed?start=false&loop=true&delayms=60000" frameborder="0" width="720" height="441" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>'
+    }
+    console.log(window.location.hash)
+</script>
+
+{{ endblock }}
