@@ -1,35 +1,9 @@
 # from os import environ
 # import sys
 # import traceback
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
-from starlette.applications import Starlette
-from otree.asgi import app
 
-# # Основные настройки oTree
+# Основные настройки oTree
 EXTENSION_APPS = ['otree']
-
-# Добавляем CORS middleware напрямую к приложению
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://gregory-ch.github.io"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    max_age=1728000
-)
-
-# # CORS middleware настройки
-# MIDDLEWARE = [
-#     Middleware(
-#         CORSMiddleware,
-#         allow_origins=['*'],
-#         allow_methods=['*'],
-#         allow_headers=['*'],
-#         allow_credentials=False,
-#         max_age=1728000
-#     )
-# ]
 
 SESSION_CONFIGS = [
    
