@@ -12,20 +12,36 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+# Разрешенные домены для CORS
+ALLOWED_ORIGINS = ["https://gregory-ch.github.io"]
+
 # Специальный middleware для обработки OPTIONS запросов
 class OptionsCorsMiddleware:
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        self.allowed_origins = ALLOWED_ORIGINS
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
+        # Получаем origin из заголовков запроса
+        origin = None
+        for key, value in scope.get("headers", []):
+            if key.decode("latin1").lower() == "origin":
+                origin = value.decode("latin1")
+                break
+        
+        # Если origin отсутствует или не в списке разрешенных, не добавляем CORS-заголовки
+        if not origin or origin not in self.allowed_origins:
+            await self.app(scope, receive, send)
+            return
+
         # Обработка OPTIONS запросов
         if scope["method"] == "OPTIONS":
             headers = [
-                (b"access-control-allow-origin", b"*"),
+                (b"access-control-allow-origin", origin.encode()),
                 (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
                 (b"access-control-allow-headers", b"*"),
                 (b"access-control-allow-credentials", b"true"),
@@ -34,14 +50,6 @@ class OptionsCorsMiddleware:
                 (b"content-length", b"0"),
             ]
             
-            async def send_response(message):
-                if message["type"] == "http.response.start":
-                    message.update({
-                        "status": 200,
-                        "headers": headers
-                    })
-                await send(message)
-                
             await send({
                 "type": "http.response.start",
                 "status": 200,
@@ -58,7 +66,7 @@ class OptionsCorsMiddleware:
         async def send_wrapper(message):
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
-                headers.append((b"access-control-allow-origin", b"*"))
+                headers.append((b"access-control-allow-origin", origin.encode()))
                 headers.append((b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"))
                 headers.append((b"access-control-allow-headers", b"*"))
                 headers.append((b"access-control-allow-credentials", b"true"))
@@ -70,7 +78,7 @@ class OptionsCorsMiddleware:
 # Добавляем CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Разрешаем запросы с любого домена для отладки
+    allow_origins=ALLOWED_ORIGINS,  # Разрешаем запросы только с Jekyll сайта
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     allow_headers=["*"],
