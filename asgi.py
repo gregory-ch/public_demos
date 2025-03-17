@@ -1,15 +1,17 @@
+import os
 from otree.asgi import app
 from starlette.middleware.cors import CORSMiddleware
 
-# Добавляем CORS middleware к приложению oTree
+# Полностью расширенная конфигурация CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://gregory-ch.github.io"],  # Разрешаем запросы с Jekyll сайта
-    allow_credentials=True,                          # Разрешаем передачу куков и credentials
-    allow_methods=["*"],                             # Разрешаем все HTTP методы
-    allow_headers=["*"],                             # Разрешаем все заголовки
-    max_age=1728000                                  # 20 дней в секундах
+    allow_origins=["*"],  # Разрешаем запросы с любого домена для отладки
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=1728000
 )
 
-# Экспортируем приложение для Heroku
+# Убедимся, что приложение доступно через стандартную переменную
 application = app 
