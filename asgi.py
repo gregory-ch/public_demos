@@ -1,8 +1,9 @@
 import os
-from otree.asgi import app
+from otree.asgi import app as otree_app
 from starlette.middleware.cors import CORSMiddleware
 
-# Полностью расширенная конфигурация CORS
+# Добавляем CORS middleware к приложению oTree
+app = otree_app
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Разрешаем запросы с любого домена для отладки
@@ -13,5 +14,5 @@ app.add_middleware(
     max_age=1728000
 )
 
-# Убедимся, что приложение доступно через стандартную переменную
+# Это важно для Heroku - приложение должно быть доступно как 'application'
 application = app 
