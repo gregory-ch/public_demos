@@ -1,87 +1,99 @@
 #!/usr/bin/env python
 import os
 import sys
+import time
+import logging
 import subprocess
 
-# Импортируем otree.asgi и получаем его приложение
-import otree.asgi
-from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware import Middleware
-from starlette.responses import Response
+# Создадим файл для подтверждения запуска
+with open("cors_debug.log", "w") as f:
+    f.write(f"Script started at {time.ctime()}\n")
+    f.write(f"PYTHONPATH: {sys.path}\n")
+    f.write(f"Current directory: {os.getcwd()}\n")
+    f.write(f"PORT env: {os.environ.get('PORT', 'not set')}\n")
 
-# Получаем домен из переменной окружения или используем значение по умолчанию
-CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
-print(f"Setting up CORS headers in run.py for origin: {CORS_ALLOW_ORIGIN}")
-
-# Вместо добавления middleware, создаем полностью новое ASGI приложение
-# которое перехватывает запросы до того, как они попадут в oTree
-class CorsApplication:
-    def __init__(self, app):
-        self.app = app
-        self.cors_origin = CORS_ALLOW_ORIGIN.encode()
-        print("Creating custom ASGI application wrapper")
-        
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        # Перехватываем все OPTIONS запросы и обрабатываем их напрямую
-        if scope["method"] == "OPTIONS":
-            print(f"Intercepting OPTIONS request to {scope['path']}")
-            
-            # Отправляем HTTP ответ со статусом 200 и CORS заголовками
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [
-                    (b"content-type", b"text/plain"),
-                    (b"access-control-allow-origin", self.cors_origin),
-                    (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                    (b"access-control-allow-headers", b"*"),
-                    (b"access-control-allow-credentials", b"true"),
-                    (b"access-control-max-age", b"1728000")
-                ]
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b"OK",
-                "more_body": False
-            })
-            return
-            
-        # Для не-OPTIONS запросов добавляем CORS заголовки к ответам
-        async def send_with_cors(message):
-            if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-                # Добавляем CORS заголовки
-                headers.append((b"access-control-allow-origin", self.cors_origin))
-                headers.append((b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"))
-                headers.append((b"access-control-allow-headers", b"*"))
-                headers.append((b"access-control-allow-credentials", b"true"))
-                headers.append((b"access-control-max-age", b"1728000"))
-                message["headers"] = headers
-            
-            await send(message)
-            
-        await self.app(scope, receive, send_with_cors)
-
-# Создаем новое приложение, заменяя приложение oTree нашим обертывающим приложением
-app = otree.asgi.app
-otree.asgi.app = CorsApplication(app)
-
-print("CORS wrapper successfully applied to oTree application")
-
-# Получаем порт из переменных окружения (для Heroku)
-port = os.environ.get('PORT', '8000')
-
-# Запускаем timeoutsubprocess для обработки таймаутов
-subprocess.Popen(
-    ['otree', 'timeoutsubprocess', str(port)], 
-    env=os.environ.copy()
+# Настройка логирования в файл и stdout
+logging.basicConfig(
+    level=logging.INFO,
+    format='[CORS-DEBUG] %(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("cors_debug.log", mode="a"),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
+logger = logging.getLogger('cors_debug')
+logger.info("Debug script starting")
 
-print('Running prodserver with patched CORS application')
-
-# Запускаем стандартный prodserver1of2
-os.system(f"otree prodserver1of2") 
+try:
+    # Импортируем otree.asgi и получаем его приложение
+    import otree.asgi
+    logger.info("Successfully imported otree.asgi")
+    
+    # Получаем домен из переменной окружения или используем значение по умолчанию
+    CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
+    logger.info(f"Setting up CORS headers for origin: {CORS_ALLOW_ORIGIN}")
+    
+    # Простая обертка для логирования всех запросов
+    async def debug_middleware(scope, receive, send):
+        # Логируем информацию о запросе
+        if scope["type"] == "http":
+            method = scope.get("method", "UNKNOWN")
+            path = scope.get("path", "UNKNOWN")
+            logger.info(f"Request: {method} {path}")
+            
+            # Для OPTIONS запросов сразу отвечаем 200 OK с CORS заголовками
+            if method == "OPTIONS":
+                logger.info(f"Intercepting OPTIONS request to {path}")
+                
+                await send({
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [
+                        (b"content-type", b"text/plain"),
+                        (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
+                        (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
+                        (b"access-control-allow-headers", b"*"),
+                        (b"access-control-allow-credentials", b"true"),
+                        (b"access-control-max-age", b"1728000")
+                    ]
+                })
+                
+                await send({
+                    "type": "http.response.body",
+                    "body": b"CORS OK",
+                    "more_body": False
+                })
+                
+                logger.info(f"Responded to OPTIONS request with 200 OK")
+                return
+        
+        # Для всех других запросов просто передаем в приложение
+        await otree.asgi.app(scope, receive, send)
+    
+    # Заменяем приложение otree нашим middleware
+    logger.info("Replacing otree.asgi.app with debug middleware")
+    original_app = otree.asgi.app
+    otree.asgi.app = debug_middleware
+    logger.info("CORS debug middleware applied")
+    
+    # Запускаем prodserver
+    logger.info("Starting otree prodserver")
+    port = os.environ.get('PORT', '8000')
+    
+    # Запускаем timeoutsubprocess
+    subprocess.Popen(
+        ['otree', 'timeoutsubprocess', str(port)], 
+        env=os.environ.copy()
+    )
+    
+    logger.info('Running otree prodserver1of2')
+    os.system(f"otree prodserver1of2")
+    
+except Exception as e:
+    # Логируем любые исключения
+    with open("cors_debug.log", "a") as f:
+        f.write(f"ERROR: {str(e)}\n")
+    logger.error(f"Exception: {str(e)}", exc_info=True)
+    # Запускаем обычный prodserver в случае ошибки
+    port = os.environ.get('PORT', '8000')
+    os.system(f"otree prodserver1of2") 
