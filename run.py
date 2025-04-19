@@ -1,115 +1,151 @@
 #!/usr/bin/env python
 import os
 import sys
-import time
+import subprocess
 import logging
-import json
+from uvicorn.main import Config, Server
 
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
-    format='[CORS-WRAPPER] %(asctime)s - %(levelname)s - %(message)s'
+    format='[CORS-SERVER] %(asctime)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger('cors_wrapper')
-logger.info("=== CORS Wrapper Starting ===")
+logger = logging.getLogger('cors_server')
+logger.info("=== Custom CORS prodserver starting ===")
 
-# Получаем домен из переменной окружения или используем значение по умолчанию
-CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
-logger.info(f"CORS origin: {CORS_ALLOW_ORIGIN}")
+# Разрешенные домены для CORS
+ALLOWED_ORIGINS = [os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')]
+logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
 
-# Импортируем otree.asgi до всех других импортов oTree
+# Импортируем oTree ASGI приложение
+# Важно: импортируем до применения middleware
 import otree.asgi
 
-# Создаем полностью новое ASGI приложение-обертку
-otree_app = otree.asgi.app  # Сохраняем оригинальное приложение oTree
+# Применяем CORS middleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
-async def cors_wrapper_app(scope, receive, send):
-    """
-    Полностью новое ASGI приложение, которое будет:
-    1. Напрямую отвечать на OPTIONS запросы с CORS заголовками
-    2. Добавлять CORS заголовки к ответам oTree для других методов
-    """
-    # Логируем каждый запрос
-    if scope["type"] == "http":
-        method = scope.get("method", "UNKNOWN")
-        path = scope.get("path", "UNKNOWN")
-        client = scope.get("client", ("Unknown", 0))
-        logger.info(f"Request: {method} {path} from {client[0]}:{client[1]}")
+# Кастомный middleware для обработки OPTIONS запросов
+class OptionsCorsMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+        self.allowed_origins = ALLOWED_ORIGINS
+        logger.info("OptionsCorsMiddleware initialized")
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Получаем origin из заголовков запроса
+        origin = None
+        for key, value in scope.get("headers", []):
+            if key.decode("latin1").lower() == "origin":
+                origin = value.decode("latin1")
+                break
         
-        # Напрямую отвечаем на OPTIONS запросы
-        if method == "OPTIONS":
-            logger.info(f"Handling OPTIONS request to {path}")
+        # Логируем информацию о запросе
+        if scope["type"] == "http" and scope.get("method"):
+            logger.info(f"Request: {scope.get('method')} {scope.get('path')} (Origin: {origin})")
+        
+        # Обработка OPTIONS запросов
+        if scope.get("method") == "OPTIONS":
+            logger.info(f"Processing OPTIONS request to {scope.get('path')}")
+            headers = [
+                (b"access-control-allow-origin", origin.encode() if origin else b"*"),
+                (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
+                (b"access-control-allow-headers", b"*"),
+                (b"access-control-allow-credentials", b"true"),
+                (b"access-control-max-age", b"1728000"),
+                (b"content-type", b"text/plain"),
+                (b"content-length", b"0"),
+            ]
             
-            # Отправляем HTTP ответ со статусом 200 и CORS заголовками
             await send({
                 "type": "http.response.start",
                 "status": 200,
-                "headers": [
-                    (b"content-type", b"text/plain"),
-                    (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
-                    (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                    (b"access-control-allow-headers", b"*"),
-                    (b"access-control-allow-credentials", b"true"),
-                    (b"access-control-max-age", b"1728000")
-                ]
+                "headers": headers,
             })
             
             await send({
                 "type": "http.response.body",
-                "body": b"CORS OK",
-                "more_body": False
+                "body": b"",
             })
-            
-            logger.info(f"OPTIONS request handled successfully")
+            logger.info(f"Responded to OPTIONS request with 200 OK")
             return
+            
+        # Добавляем CORS-заголовки ко всем другим ответам
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                
+                # Добавляем CORS заголовки
+                if origin:
+                    # Проверяем, есть ли уже такие заголовки
+                    header_names = [h[0].lower() for h in headers]
+                    
+                    # Добавляем только если нет
+                    if b"access-control-allow-origin" not in header_names:
+                        headers.append((b"access-control-allow-origin", origin.encode()))
+                    if b"access-control-allow-methods" not in header_names:
+                        headers.append((b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"))
+                    if b"access-control-allow-headers" not in header_names:
+                        headers.append((b"access-control-allow-headers", b"*"))
+                    if b"access-control-allow-credentials" not in header_names:
+                        headers.append((b"access-control-allow-credentials", b"true"))
+                    
+                    message["headers"] = headers
+                    logger.info(f"Added CORS headers to response")
+            
+            await send(message)
+            
+        await self.app(scope, receive, send_wrapper)
+
+# Применяем стандартный CORSMiddleware (для совместимости)
+logger.info("Applying standard CORSMiddleware")
+otree.asgi.app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=1728000
+)
+
+# Применяем наш кастомный middleware для обработки OPTIONS запросов
+logger.info("Applying custom OptionsCorsMiddleware")
+app = OptionsCorsMiddleware(otree.asgi.app)
+
+def main():
+    # Получаем порт из переменных окружения (для Heroku)
+    port = os.environ.get('PORT', '8000')
+    addr = '0.0.0.0'  # На Heroku нужно слушать на всех интерфейсах
     
-    # Для всех других запросов, перенаправляем в oTree, но обрабатываем ответы
-    async def send_with_cors(message):
-        if message["type"] == "http.response.start":
-            # Добавляем CORS заголовки ко всем HTTP ответам
-            headers = list(message.get("headers", []))
-            
-            # Добавляем заголовки CORS
-            cors_headers = [
-                (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
-                (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                (b"access-control-allow-headers", b"*"),
-                (b"access-control-allow-credentials", b"true"),
-                (b"access-control-max-age", b"1728000")
-            ]
-            
-            # Добавляем только те заголовки, которых еще нет
-            existing_header_names = [h[0].lower() for h in headers]
-            for header in cors_headers:
-                if header[0].lower() not in existing_header_names:
-                    headers.append(header)
-            
-            # Заменяем заголовки в сообщении
-            message["headers"] = headers
-            
-            if scope.get("method") and scope.get("path"):
-                logger.info(f"Added CORS headers to response from {scope['method']} {scope['path']}")
-        
-        # Передаем модифицированное или немодифицированное сообщение дальше
-        await send(message)
+    # Запускаем timeoutsubprocess (точно как в prodserver1of2)
+    logger.info(f"Starting otree timeoutsubprocess {port}")
+    subprocess.Popen(
+        ['otree', 'timeoutsubprocess', str(port)], 
+        env=os.environ.copy()
+    )
     
-    # Вызываем оригинальное приложение oTree, но перехватываем ответы
-    await otree_app(scope, receive, send_with_cors)
+    logger.info(f"Running custom prodserver with CORS on {addr}:{port}")
+    
+    # Запускаем Uvicorn напрямую с нашим модифицированным app
+    # Точно соответствует конфигурации в prodserver1of2.py
+    config = Config(
+        app=app,  # Используем наше модифицированное приложение
+        host=addr,
+        port=int(port),
+        log_level="info",
+        log_config=None,  # oTree имеет свой логгер
+        workers=1,
+        ws='websockets',  # websockets библиотека обрабатывает отключения автоматически
+    )
+    
+    logger.info("Starting Uvicorn server")
+    server = Server(config=config)
+    server.run()
 
-# Заменяем приложение oTree нашей оберткой
-otree.asgi.app = cors_wrapper_app
-logger.info("CORS wrapper applied to oTree ASGI app")
-
-# Запускаем проверку системы
-logger.info(f"Python version: {sys.version}")
-logger.info(f"Current working dir: {os.getcwd()}")
-logger.info(f"PORT: {os.environ.get('PORT', 'not set')}")
-
-# Теперь запускаем стандартный prodserver1of2
-logger.info("Starting oTree prodserver1of2")
-
-# Запускаем сервер 
-from subprocess import call
-logger.info("Executing otree prodserver1of2")
-sys.stdout.flush()  # Убедимся, что все логи будут видны
-call(["otree", "prodserver1of2"]) 
+if __name__ == "__main__":
+    main() 
