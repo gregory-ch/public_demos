@@ -3,7 +3,17 @@
 # import traceback
 
 # Основные настройки oTree
-EXTENSION_APPS = ['otree']
+# EXTENSION_APPS = ['otree']
+
+# Временно удаляем другие CORS настройки для чистоты
+# MIDDLEWARE = [
+#     'starlette.middleware.cors.CORSMiddleware',
+# ]
+
+# CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_CREDENTIALS = True
+# CORS_ALLOW_METHODS = ["*"]
+# CORS_ALLOW_HEADERS = ["*"]
 
 SESSION_CONFIGS = [
    
