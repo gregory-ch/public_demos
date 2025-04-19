@@ -5,19 +5,11 @@ import time
 import logging
 import subprocess
 
-# Создадим файл для подтверждения запуска
-with open("cors_debug.log", "w") as f:
-    f.write(f"Script started at {time.ctime()}\n")
-    f.write(f"PYTHONPATH: {sys.path}\n")
-    f.write(f"Current directory: {os.getcwd()}\n")
-    f.write(f"PORT env: {os.environ.get('PORT', 'not set')}\n")
-
 # Настройка логирования в файл и stdout
 logging.basicConfig(
     level=logging.INFO,
     format='[CORS-DEBUG] %(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("cors_debug.log", mode="a"),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -76,24 +68,20 @@ try:
     otree.asgi.app = debug_middleware
     logger.info("CORS debug middleware applied")
     
-    # Запускаем prodserver
-    logger.info("Starting otree prodserver")
+    # Получаем порт из переменных окружения (для Heroku)
     port = os.environ.get('PORT', '8000')
     
-    # Запускаем timeoutsubprocess
-    subprocess.Popen(
-        ['otree', 'timeoutsubprocess', str(port)], 
-        env=os.environ.copy()
-    )
-    
-    logger.info('Running otree prodserver1of2')
-    os.system(f"otree prodserver1of2")
+    # Вместо запуска стандартных команд, запускаем напрямую prodserver с нашим измененным приложением
+    from otree.main import execute_from_command_line
+    logger.info(f"Running otree runprodserver {port}")
+    sys.argv = ['otree', 'runprodserver', port]
+    execute_from_command_line()
     
 except Exception as e:
     # Логируем любые исключения
-    with open("cors_debug.log", "a") as f:
-        f.write(f"ERROR: {str(e)}\n")
     logger.error(f"Exception: {str(e)}", exc_info=True)
-    # Запускаем обычный prodserver в случае ошибки
+    
+    # В случае ошибки с базой данных, запускаем стандартную команду
+    logger.info("Falling back to standard otree prodserver1of2")
     port = os.environ.get('PORT', '8000')
     os.system(f"otree prodserver1of2") 
