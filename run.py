@@ -3,7 +3,6 @@ import os
 import sys
 import subprocess
 import logging
-from uvicorn.main import Config, Server
 
 # Настройка логирования
 logging.basicConfig(
@@ -17,100 +16,67 @@ logger.info("=== Custom CORS prodserver starting ===")
 CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
 logger.info(f"CORS allowed origin: {CORS_ALLOW_ORIGIN}")
 
-# Импортируем oTree ASGI приложение
-import otree.asgi
-from starlette.types import ASGIApp, Receive, Scope, Send
+def handle_options_requests():
+    # Запускаем отдельный HTTP-сервер только для обработки OPTIONS запросов
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import threading
 
-# Очень простой middleware только для OPTIONS запросов
-class OptionsMiddleware:
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
-        logger.info("Simple OPTIONS middleware initialized")
+    class OptionsHandler(BaseHTTPRequestHandler):
+        def do_OPTIONS(self):
+            self.send_response(200)
+            self.send_header('Access-Control-Allow-Origin', CORS_ALLOW_ORIGIN)
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', '*')
+            self.send_header('Access-Control-Allow-Credentials', 'true')
+            self.send_header('Access-Control-Max-Age', '1728000')
+            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            logger.info(f"Responded to OPTIONS request with 200 OK: {self.path}")
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        # Пропускаем не-HTTP запросы
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
+        def do_GET(self):
+            # Просто перенаправляем все остальные запросы на основной сервер
+            self.send_response(301)
+            self.send_header('Location', f'http://127.0.0.1:{os.environ.get("PORT", "8000")}{self.path}')
+            self.end_headers()
 
-        # Проверяем, является ли запрос OPTIONS
-        if scope.get("method") == "OPTIONS":
-            path = scope.get("path", "")
-            logger.info(f"Handling OPTIONS request to {path}")
-            
-            headers = [
-                (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
-                (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                (b"access-control-allow-headers", b"*"),
-                (b"access-control-allow-credentials", b"true"),
-                (b"access-control-max-age", b"1728000"),
-                (b"content-type", b"text/plain"),
-                (b"content-length", b"0"),
-            ]
-            
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": headers,
-            })
-            
-            await send({
-                "type": "http.response.body",
-                "body": b"",
-            })
-            logger.info("Responded to OPTIONS request with 200 OK")
-            return
-        
-        # Для всех других запросов просто пропускаем к oTree
-        await self.app(scope, receive, send)
+    # Получаем порт для OPTIONS сервера, делаем его на 1 больше чем основной порт
+    main_port = int(os.environ.get('PORT', '8000'))
+    options_port = main_port  # Используем тот же порт
 
-# Добавляем стандартный CORSMiddleware к приложению oTree
-from starlette.middleware.cors import CORSMiddleware
+    # Запускаем OPTIONS сервер в отдельном потоке
+    def run_options_server():
+        try:
+            server = HTTPServer(('0.0.0.0', options_port), OptionsHandler)
+            logger.info(f"Starting OPTIONS handler on port {options_port}")
+            server.serve_forever()
+        except Exception as e:
+            logger.error(f"Error starting OPTIONS server: {e}")
 
-logger.info("Adding CORS middleware to oTree app")
-otree.asgi.app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[CORS_ALLOW_ORIGIN, "*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=1728000
-)
+    # Запускаем отдельный сервер для OPTIONS
+    thread = threading.Thread(target=run_options_server)
+    thread.daemon = True
+    thread.start()
 
-# Применяем наш простой middleware для OPTIONS запросов
-logger.info("Applying OPTIONS middleware")
-app = OptionsMiddleware(otree.asgi.app)
+def run_standard_prodserver():
+    logger.info("Running standard oTree prodserver")
+    port = os.environ.get('PORT', '8000')
+    
+    # Модифицируем otree.settings для включения CORS (это не сработает в продакшн)
+    # import otree.settings
+    # otree.settings.CORS_ALLOW_ALL = True
+    
+    # Запускаем стандартную команду prodserver
+    from otree.cli.prodserver1of2 import Command
+    command = Command()
+    command.handle(addrport=f"0.0.0.0:{port}")
 
 def main():
-    # Получаем порт из переменных окружения (для Heroku)
-    port = os.environ.get('PORT', '8000')
-    addr = '0.0.0.0'  # На Heroku нужно слушать на всех интерфейсах
+    # Настраиваем обработку OPTIONS запросов
+    handle_options_requests()
     
-    # Запускаем timeoutsubprocess (точно как в prodserver1of2)
-    logger.info(f"Starting otree timeoutsubprocess {port}")
-    subprocess.Popen(
-        ['otree', 'timeoutsubprocess', str(port)], 
-        env=os.environ.copy()
-    )
-    
-    logger.info(f"Running prodserver with CORS on {addr}:{port}")
-    
-    # Запускаем Uvicorn напрямую с нашим модифицированным app
-    # Точно соответствует конфигурации в prodserver1of2.py
-    config = Config(
-        app=app,  # Используем наше модифицированное приложение
-        host=addr,
-        port=int(port),
-        log_level="info",
-        log_config=None,  # oTree имеет свой логгер
-        workers=1,
-        ws='websockets',  # websockets библиотека обрабатывает отключения автоматически
-    )
-    
-    logger.info("Starting Uvicorn server")
-    server = Server(config=config)
-    server.run()
+    # Запускаем стандартный prodserver
+    run_standard_prodserver()
 
 if __name__ == "__main__":
     main() 
