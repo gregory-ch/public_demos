@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 import os
 import sys
-import subprocess
 import logging
-from uvicorn.main import Config, Server
+import subprocess
 
 # Настройка логирования
 logging.basicConfig(
@@ -17,101 +16,64 @@ logger.info("=== Starting oTree with CORS support ===")
 CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
 logger.info(f"CORS allowed origin: {CORS_ALLOW_ORIGIN}")
 
-# Импортируем приложение oTree перед любыми модификациями
-import otree.asgi
+# Патчим функции oTree перед импортом
+import types
 
-# CORS Headers для всех ответов (вместо middleware)
-from starlette.types import ASGIApp, Receive, Scope, Send
-
-class CORSHeaders:
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
-        logger.info("CORS Headers wrapper initialized")
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        # Для WebSocket и HTTP соединений разные подходы
-        if scope["type"] == "websocket":
-            # Для WebSocket просто пропускаем без модификаций
-            await self.app(scope, receive, send)
-            return
-
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        # Обработка OPTIONS запросов
-        if scope.get("method") == "OPTIONS":
-            # Отправляем CORS заголовки и завершаем запрос
-            headers = [
-                (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
-                (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                (b"access-control-allow-headers", b"*"),
-                (b"access-control-allow-credentials", b"true"),
-                (b"access-control-max-age", b"1728000"),
-                (b"content-type", b"text/plain"),
-                (b"content-length", b"0"),
-            ]
-            
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": headers,
-            })
-            
-            await send({
-                "type": "http.response.body",
-                "body": b"",
-            })
-            logger.info("Responded to OPTIONS request with 200 OK")
-            return
-
-        # Для остальных HTTP запросов добавляем CORS заголовки к ответу
-        async def wrapped_send(message):
-            if message["type"] == "http.response.start":
-                # Добавляем CORS заголовки ко всем ответам
-                headers = list(message.get("headers", []))
-                headers.append((b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()))
-                headers.append((b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"))
-                headers.append((b"access-control-allow-headers", b"*"))
-                headers.append((b"access-control-allow-credentials", b"true"))
-                message["headers"] = headers
-            
-            await send(message)
-        
-        await self.app(scope, receive, wrapped_send)
-
-# Применяем наш класс CORSHeaders к oTree app
-app = CORSHeaders(otree.asgi.app)
-
-# Основная функция для запуска сервера
-def main():
-    # Получаем порт из переменных окружения (для Heroku)
-    port = os.environ.get('PORT', '8000')
-    addr = '0.0.0.0'  # На Heroku нужно слушать на всех интерфейсах
+def patch_otree_routes():
+    """
+    Патчим маршруты oTree для добавления CORS заголовков
+    и обработки OPTIONS запросов
+    """
+    logger.info("Patching oTree HTTP handlers for CORS support")
     
-    # Запускаем timeoutsubprocess (точно как в prodserver1of2)
-    logger.info(f"Starting otree timeoutsubprocess {port}")
+    # Импортируем модуль маршрутов только после патча
+    import otree.urls
+    from starlette.responses import PlainTextResponse
+    
+    # Сохраняем оригинальную функцию add_route
+    original_add_route = otree.urls.routes.add_route
+    
+    # Создаем обработчик для OPTIONS запросов
+    async def options_handler(request):
+        """Обработчик OPTIONS запросов для CORS preflight"""
+        headers = {
+            "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "1728000",
+        }
+        return PlainTextResponse("", headers=headers)
+
+    # Добавляем обработчик OPTIONS запросов
+    otree.urls.routes.add_route("OPTIONS", "/", options_handler)
+    otree.urls.routes.add_route("OPTIONS", "/{path:path}", options_handler)
+    
+    logger.info("Added OPTIONS handlers")
+
+# Запуск стандартного prodserver
+def run_standard_prodserver():
+    """Запуск стандартного oTree prodserver"""
+    
+    # Патчим маршруты перед запуском
+    patch_otree_routes()
+    
+    # Теперь запускаем стандартный prodserver
+    logger.info("Starting standard oTree prodserver")
+    port = os.environ.get('PORT', '8000')
+    
+    # Используем напрямую код из prodserver1of2.py
+    from otree.cli.prodserver1of2 import run_uvicorn, print_function
+    
+    # Запускаем timeoutsubprocess
     subprocess.Popen(
         ['otree', 'timeoutsubprocess', str(port)], 
         env=os.environ.copy()
     )
     
-    logger.info(f"Running oTree server with CORS on {addr}:{port}")
-    
-    # Конфигурация и запуск сервера - точно как в prodserver1of2
-    config = Config(
-        app=app,  # Используем наше модифицированное приложение
-        host=addr,
-        port=int(port),
-        log_level="info",
-        log_config=None,  # oTree имеет свой логгер
-        workers=1,
-        ws='websockets',  # websockets библиотека для WebSocket
-    )
-    
-    logger.info("Starting Uvicorn server")
-    server = Server(config=config)
-    server.run()
+    # Запускаем uvicorn с standard app
+    print_function('Running prodserver with CORS patch')
+    run_uvicorn('0.0.0.0', port, is_devserver=False)
 
 if __name__ == "__main__":
-    main() 
+    run_standard_prodserver() 
