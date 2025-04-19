@@ -16,49 +16,45 @@ logger.info("=== Starting oTree with CORS support ===")
 CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
 logger.info(f"CORS allowed origin: {CORS_ALLOW_ORIGIN}")
 
-# Патчим функции oTree перед импортом
-import types
-
-def patch_otree_routes():
-    """
-    Патчим маршруты oTree для добавления CORS заголовков
-    и обработки OPTIONS запросов
-    """
-    logger.info("Patching oTree HTTP handlers for CORS support")
-    
-    # Импортируем модуль маршрутов только после патча
-    import otree.urls
-    from starlette.responses import PlainTextResponse
-    
-    # Сохраняем оригинальную функцию add_route
-    original_add_route = otree.urls.routes.add_route
-    
-    # Создаем обработчик для OPTIONS запросов
-    async def options_handler(request):
-        """Обработчик OPTIONS запросов для CORS preflight"""
-        headers = {
-            "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Max-Age": "1728000",
-        }
-        return PlainTextResponse("", headers=headers)
-
-    # Добавляем обработчик OPTIONS запросов
-    otree.urls.routes.add_route("OPTIONS", "/", options_handler)
-    otree.urls.routes.add_route("OPTIONS", "/{path:path}", options_handler)
-    
-    logger.info("Added OPTIONS handlers")
-
-# Запуск стандартного prodserver
 def run_standard_prodserver():
-    """Запуск стандартного oTree prodserver"""
+    """Запуск стандартного oTree prodserver с минимальными модификациями для CORS"""
     
-    # Патчим маршруты перед запуском
-    patch_otree_routes()
+    # Подготавливаем ASGI приложение для обработки CORS
+    logger.info("Setting up CORS support for oTree")
     
-    # Теперь запускаем стандартный prodserver
+    # Создаем простой HTTP-сервер для обработки OPTIONS запросов
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import threading
+    
+    class CORSHandler(BaseHTTPRequestHandler):
+        def do_OPTIONS(self):
+            self.send_response(200)
+            self.send_header('Access-Control-Allow-Origin', CORS_ALLOW_ORIGIN)
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', '*')
+            self.send_header('Access-Control-Allow-Credentials', 'true')
+            self.send_header('Access-Control-Max-Age', '1728000')
+            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+    
+    def run_options_server():
+        # Запускаем на том же порту, что и основной сервер
+        # Heroku будет перенаправлять OPTIONS запросы сюда
+        port = int(os.environ.get('PORT_OPTIONS', '8001'))
+        logger.info(f"Starting OPTIONS handler server on port {port}")
+        try:
+            server = HTTPServer(('0.0.0.0', port), CORSHandler)
+            server.serve_forever()
+        except Exception as e:
+            logger.error(f"Error starting OPTIONS server: {e}")
+    
+    # Запускаем OPTIONS сервер в отдельном потоке
+    options_thread = threading.Thread(target=run_options_server, daemon=True)
+    options_thread.start()
+    logger.info("Started OPTIONS handler in background thread")
+    
+    # Запускаем стандартный prodserver
     logger.info("Starting standard oTree prodserver")
     port = os.environ.get('PORT', '8000')
     
@@ -71,8 +67,8 @@ def run_standard_prodserver():
         env=os.environ.copy()
     )
     
-    # Запускаем uvicorn с standard app
-    print_function('Running prodserver with CORS patch')
+    # Запускаем uvicorn со standard app
+    print_function('Running standard oTree prodserver')
     run_uvicorn('0.0.0.0', port, is_devserver=False)
 
 if __name__ == "__main__":
