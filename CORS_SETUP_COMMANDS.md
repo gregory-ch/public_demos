@@ -239,7 +239,7 @@ echo "worker: otree prodserver2of2" >> Procfile
 
 ```bash
 # Добавляем uvicorn в dependencies
-echo "uvicorn>=0.15.0" >> requirements.txt
+echo "uvicorn==0.13.4" >> requirements.txt
 ```
 
 ## 8. Развертывание и проверка
