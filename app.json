@@ -1,0 +1,15 @@
+{
+  "name": "oTree Application",
+  "description": "oTree 5+ application with CORS support",
+  "env": {
+    "CORS_ALLOW_ORIGIN": {
+      "description": "Allowed CORS origin",
+      "value": "https://gregory-ch.github.io"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+} 
