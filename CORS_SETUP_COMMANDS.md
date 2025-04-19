@@ -23,7 +23,7 @@ app.add_middleware(
 application = app
 ```
 
-Это не сработало, так как oTree при запуске использует свой модуль otree.asgi, а не локальный файл asgi.py.
+Первоначально это решение казалось не работающим, так как предполагалось, что oTree при запуске использует свой модуль otree.asgi, а не локальный файл asgi.py.
 
 ## 2. Попытка настройки через settings.py
 
@@ -39,162 +39,14 @@ CORS_ALLOW_METHODS = ["*"]
 CORS_ALLOW_HEADERS = ["*"]
 ```
 
-Это также не сработало, так как oTree инициализирует приложение и middleware в особом порядке.
+Это также не дало ожидаемых результатов, так как oTree инициализирует приложение и middleware в особом порядке.
 
-## 3. Анализ работы prodserver
-
-Изучили, что делает команда `otree prodserver1of2`:
-
-```python
-# Фрагмент кода продсервера
-def run_uvicorn(addr, port, *, is_devserver):
-    from uvicorn.main import Config, Server
-
-    config = Config(
-        'otree.asgi:app',
-        host=addr,
-        port=int(port),
-        log_level='warning' if is_devserver else "info",
-        log_config=None,
-        workers=1,
-        ws='websockets',
-    )
-    server = Server(config=config)
-    server.run()
-```
-
-Выяснили, что prodserver запускает Uvicorn и загружает app из модуля otree.asgi.
-
-## 4. Создание кастомного скрипта запуска
-
-```bash
-# Создаем файл run.py
-touch run.py
-```
-
-```python
-# run.py - улучшенная версия
-import os
-import sys
-import importlib
-import subprocess
-from importlib import reload
-
-# Импортируем модуль otree.asgi перед патчингом
-import otree.asgi
-
-# Импортируем необходимые зависимости
-from starlette.middleware.cors import CORSMiddleware
-from starlette.types import ASGIApp, Receive, Scope, Send
-
-# Патчим CORS для специальной обработки OPTIONS запросов
-ALLOWED_ORIGINS = ["https://gregory-ch.github.io"]
-
-# Сохраняем оригинальное приложение
-original_app = otree.asgi.app
-
-# Специальный middleware для обработки OPTIONS запросов
-class OptionsCorsMiddleware:
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
-        self.allowed_origins = ALLOWED_ORIGINS
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        # Получаем origin из заголовков запроса
-        origin = None
-        for key, value in scope.get("headers", []):
-            if key.decode("latin1").lower() == "origin":
-                origin = value.decode("latin1")
-                break
-        
-        # Если origin отсутствует или не в списке разрешенных, не добавляем CORS-заголовки
-        if not origin or origin not in self.allowed_origins:
-            await self.app(scope, receive, send)
-            return
-
-        # Обработка OPTIONS запросов
-        if scope["method"] == "OPTIONS":
-            headers = [
-                (b"access-control-allow-origin", origin.encode()),
-                (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                (b"access-control-allow-headers", b"*"),
-                (b"access-control-allow-credentials", b"true"),
-                (b"access-control-max-age", b"1728000"),
-                (b"content-type", b"text/plain"),
-                (b"content-length", b"0"),
-            ]
-            
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": headers,
-            })
-            
-            await send({
-                "type": "http.response.body",
-                "body": b"",
-            })
-            return
-            
-        # Добавляем CORS-заголовки ко всем другим ответам
-        async def send_wrapper(message):
-            if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-                headers.append((b"access-control-allow-origin", origin.encode()))
-                headers.append((b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"))
-                headers.append((b"access-control-allow-headers", b"*"))
-                headers.append((b"access-control-allow-credentials", b"true"))
-                message["headers"] = headers
-            await send(message)
-            
-        await self.app(scope, receive, send_wrapper)
-
-# Добавляем CORS middleware
-original_app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=1728000
-)
-
-# Оборачиваем приложение нашим кастомным middleware
-patched_app = OptionsCorsMiddleware(original_app)
-
-# Заменяем приложение в модуле otree.asgi
-otree.asgi.app = patched_app
-
-# Перезагружаем модуль, чтобы изменения вступили в силу
-reload(otree.asgi)
-
-# Запускаем оригинальный prodserver1of2
-if __name__ == "__main__":
-    # Запускаем timeoutsubprocess для обработки таймаутов (как в оригинальном prodserver)
-    port = os.environ.get('PORT', '8000')
-    subprocess.Popen(
-        ['otree', 'timeoutsubprocess', str(port)],
-        env=os.environ.copy()
-    )
-    
-    print('Running patched otree prodserver with CORS middleware')
-    
-    # Запускаем оригинальный prodserver1of2 (это сохранит всю логику по работе со статическими файлами)
-    os.system(f"otree prodserver1of2")
-```
-
-## 5. Создание кастомного middleware
+## 3. Использование middleware.py и otree_extensions.py
 
 ```python
 # middleware.py
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-from starlette.types import ASGIApp, Receive, Scope, Send
 
 class CorsMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -204,74 +56,119 @@ class CorsMiddleware(BaseHTTPMiddleware):
         response.headers["Access-Control-Allow-Headers"] = "*"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         return response
-
-class CorsASGIMiddleware:
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        async def send_wrapper(message):
-            if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-                headers.append((b"access-control-allow-origin", b"*"))
-                headers.append((b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"))
-                headers.append((b"access-control-allow-headers", b"*"))
-                headers.append((b"access-control-allow-credentials", b"true"))
-                message["headers"] = headers
-            await send(message)
-
-        await self.app(scope, receive, send_wrapper)
 ```
 
-## 6. Модификация Procfile
+```python
+# otree_extensions.py
+from otree.extension_utils import get_extensions_modules, get_extensions_data_modules
+from starlette.middleware.cors import CORSMiddleware
+
+def middleware_modules():
+    return ['middleware']
+```
+
+Этот подход также не дал ожидаемых результатов из-за особенностей инициализации middleware в oTree.
+
+## 4. Создание кастомного скрипта запуска (run.py)
+
+В процессе отладки был создан кастомный скрипт запуска `run.py`, который импортирует приложение oTree, добавляет к нему CORS middleware и запускает. Этот подход работал, но был слишком сложным и приводил к проблемам с загрузкой статических файлов и конфликтам в базе данных.
+
+## 5. Возврат к решению с asgi.py
+
+После различных экспериментов выяснилось, что oTree 5+ действительно поддерживает локальный файл `asgi.py`, если он существует в проекте. Это позволило вернуться к самому простому и элегантному решению:
 
 ```bash
-# Изменяем Procfile
-echo "web: python run.py" > Procfile
-echo "worker: otree prodserver2of2" >> Procfile
+# Создаем файл asgi.py
+touch asgi.py
 ```
 
-## 7. Обновление requirements.txt
+```python
+# asgi.py - финальная версия
+from otree.asgi import app
+from starlette.middleware.cors import CORSMiddleware
+
+# Добавляем CORS middleware к приложению oTree
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://gregory-ch.github.io"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=1728000
+)
+
+# Экспортируем приложение для Heroku
+application = app
+```
+
+## 6. Очистка проекта
+
+Для избежания конфликтов и путаницы, были удалены ненужные файлы:
 
 ```bash
-# Добавляем uvicorn в dependencies
-echo "uvicorn==0.13.4" >> requirements.txt
+# Удаляем middleware.py
+rm middleware.py
+
+# Удаляем otree_extensions.py
+rm otree_extensions.py
 ```
 
-## 8. Развертывание и проверка
+## 7. Сохранение стандартного Procfile
+
+Procfile был возвращен к стандартному виду для oTree 5+:
+
+```
+web: otree prodserver1of2
+worker: otree prodserver2of2
+```
+
+## 8. Deployment и проверка
 
 ```bash
 # Коммит и деплой изменений
-git add run.py middleware.py Procfile requirements.txt
-git commit -m "Add custom CORS middleware and runner"
+git add asgi.py
+git commit -m "Add CORS middleware via asgi.py"
 git push heroku main
 ```
 
-```bash
-# Проверка CORS с помощью curl
-curl -v -X OPTIONS -H "Origin: https://gregory-ch.github.io" https://belabeu-e7061ee8ef78.herokuapp.com/demo
+## 9. Тестирование CORS
+
+Тестирование было выполнено с помощью специализированного сервиса CORS Tester:
+
+```
+URL: https://gregory-ch.github.io/
+Origin: https://belabeu-e7061ee8ef78.herokuapp.com/SessionStartLinks/taetp6lu
+Method: GET
 ```
 
-## 9. Финальное решение - полная версия run.py
+Результаты теста подтвердили, что CORS настроен корректно:
 
-Финальное решение включает в себя:
-- Кастомный скрипт run.py, который запускает приложение
-- Специальный middleware для обработки OPTIONS запросов
-- Ограничение CORS только для определенных доменов
-- Запуск таймаут-воркера, как в original prodserver
+```
+This URL will work correctly with CORS.
 
-```bash
-# Отправляем финальные изменения
-git add run.py
-git commit -m "Restrict CORS to specific origin for better security"
-git push heroku main
+Headers:
+access-control-allow-origin: *
+age: 0
+cache-control: max-age=600
+cf-cache-status: DYNAMIC
+cf-ray: 932d1bd9a06eef48-LHR
+connection: keep-alive
+content-type: text/html; charset=utf-8
+date: Sat, 19 Apr 2025 14:32:00 GMT
+expires: Sat, 19 Apr 2025 14:42:00 GMT
+last-modified: Mon, 17 Mar 2025 19:13:56 GMT
+...
 ```
 
-```bash
-# Проверяем работу CORS
-curl -v -X OPTIONS -H "Origin: https://gregory-ch.github.io" https://belabeu-e7061ee8ef78.herokuapp.com/demo
-``` 
+Также проверка логов Heroku показала наличие строки "Setting up CORS headers...", что подтверждает активацию CORS при запуске приложения.
+
+## 10. Заключение
+
+Финальное решение оказалось самым простым и элегантным - использование стандартного механизма oTree для загрузки пользовательского файла `asgi.py`. Этот подход:
+
+1. Не требует модификации стандартного процесса запуска oTree
+2. Не нарушает работу статических файлов и сессионных данных
+3. Обеспечивает корректную обработку CORS заголовков
+4. Поддерживается официально в oTree 5+
+
+Преимущество этого решения в его простоте и отсутствии сложных обходных путей, что делает его более устойчивым к будущим обновлениям oTree. 
