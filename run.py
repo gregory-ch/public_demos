@@ -20,20 +20,68 @@ logger.info(f"CORS allowed origin: {CORS_ALLOW_ORIGIN}")
 # Импортируем приложение oTree перед любыми модификациями
 import otree.asgi
 
-# Добавляем CORS middleware к приложению oTree используя стандартный middleware
-from starlette.middleware.cors import CORSMiddleware
+# CORS Headers для всех ответов (вместо middleware)
+from starlette.types import ASGIApp, Receive, Scope, Send
 
-# Настройка CORS
-logger.info("Adding CORS middleware to oTree app")
-otree.asgi.app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[CORS_ALLOW_ORIGIN, "*"],  # Разрешаем указанный домен и * для статики
-    allow_credentials=True,
-    allow_methods=["*"],  # Все методы
-    allow_headers=["*"],  # Все заголовки
-    expose_headers=["*"],
-    max_age=1728000,  # 20 дней в секундах
-)
+class CORSHeaders:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+        logger.info("CORS Headers wrapper initialized")
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        # Для WebSocket и HTTP соединений разные подходы
+        if scope["type"] == "websocket":
+            # Для WebSocket просто пропускаем без модификаций
+            await self.app(scope, receive, send)
+            return
+
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Обработка OPTIONS запросов
+        if scope.get("method") == "OPTIONS":
+            # Отправляем CORS заголовки и завершаем запрос
+            headers = [
+                (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
+                (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
+                (b"access-control-allow-headers", b"*"),
+                (b"access-control-allow-credentials", b"true"),
+                (b"access-control-max-age", b"1728000"),
+                (b"content-type", b"text/plain"),
+                (b"content-length", b"0"),
+            ]
+            
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": headers,
+            })
+            
+            await send({
+                "type": "http.response.body",
+                "body": b"",
+            })
+            logger.info("Responded to OPTIONS request with 200 OK")
+            return
+
+        # Для остальных HTTP запросов добавляем CORS заголовки к ответу
+        async def wrapped_send(message):
+            if message["type"] == "http.response.start":
+                # Добавляем CORS заголовки ко всем ответам
+                headers = list(message.get("headers", []))
+                headers.append((b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()))
+                headers.append((b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"))
+                headers.append((b"access-control-allow-headers", b"*"))
+                headers.append((b"access-control-allow-credentials", b"true"))
+                message["headers"] = headers
+            
+            await send(message)
+        
+        await self.app(scope, receive, wrapped_send)
+
+# Применяем наш класс CORSHeaders к oTree app
+app = CORSHeaders(otree.asgi.app)
 
 # Основная функция для запуска сервера
 def main():
@@ -52,7 +100,7 @@ def main():
     
     # Конфигурация и запуск сервера - точно как в prodserver1of2
     config = Config(
-        app=otree.asgi.app,  # Используем стандартное приложение oTree с нашим middleware
+        app=app,  # Используем наше модифицированное приложение
         host=addr,
         port=int(port),
         log_level="info",
