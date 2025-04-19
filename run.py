@@ -15,22 +15,17 @@ logger.info("=== Custom CORS prodserver starting ===")
 
 # Разрешенные домены для CORS
 CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
-ALLOWED_ORIGINS = [CORS_ALLOW_ORIGIN]
-logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
+logger.info(f"CORS allowed origin: {CORS_ALLOW_ORIGIN}")
 
 # Импортируем oTree ASGI приложение
-# Важно: импортируем до применения middleware
 import otree.asgi
-
-# Применяем CORS middleware
-from starlette.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-# Кастомный middleware для обработки OPTIONS запросов и статических файлов
-class OptionsAndStaticCorsMiddleware:
+# Очень простой middleware только для OPTIONS запросов
+class OptionsMiddleware:
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
-        logger.info("OptionsAndStaticCorsMiddleware initialized")
+        logger.info("Simple OPTIONS middleware initialized")
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         # Пропускаем не-HTTP запросы
@@ -38,28 +33,13 @@ class OptionsAndStaticCorsMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Проверяем, является ли запрос запросом к статическому файлу
-        path = scope.get("path", "")
-        is_static = path.startswith("/static/")
-
-        # Получаем origin из заголовков запроса
-        origin = None
-        for key, value in scope.get("headers", []):
-            if key.decode("latin1").lower() == "origin":
-                origin = value.decode("latin1")
-                break
-
-        # Обработка OPTIONS запросов
+        # Проверяем, является ли запрос OPTIONS
         if scope.get("method") == "OPTIONS":
-            logger.info(f"Processing OPTIONS request to {path}")
-            
-            # Определяем, какой origin использовать
-            origin_value = origin if origin else "*"
-            if origin in ALLOWED_ORIGINS:
-                origin_value = origin
+            path = scope.get("path", "")
+            logger.info(f"Handling OPTIONS request to {path}")
             
             headers = [
-                (b"access-control-allow-origin", origin_value.encode()),
+                (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
                 (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
                 (b"access-control-allow-headers", b"*"),
                 (b"access-control-allow-credentials", b"true"),
@@ -78,44 +58,19 @@ class OptionsAndStaticCorsMiddleware:
                 "type": "http.response.body",
                 "body": b"",
             })
-            logger.info(f"Responded to OPTIONS request with 200 OK")
+            logger.info("Responded to OPTIONS request with 200 OK")
             return
+        
+        # Для всех других запросов просто пропускаем к oTree
+        await self.app(scope, receive, send)
 
-        # Для обычных запросов обертываем send функцию, чтобы добавить CORS заголовки
-        async def send_wrapper(message):
-            if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-                
-                # Добавляем CORS заголовки только для не-статических файлов или если есть origin
-                if origin and (origin in ALLOWED_ORIGINS or is_static):
-                    # Проверяем, есть ли уже такие заголовки
-                    header_names = [h[0].lower() for h in headers]
-                    
-                    # Добавляем только если нет
-                    if b"access-control-allow-origin" not in header_names:
-                        headers.append((b"access-control-allow-origin", origin.encode()))
-                    if b"access-control-allow-methods" not in header_names:
-                        headers.append((b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"))
-                    if b"access-control-allow-headers" not in header_names:
-                        headers.append((b"access-control-allow-headers", b"*"))
-                    if b"access-control-allow-credentials" not in header_names:
-                        headers.append((b"access-control-allow-credentials", b"true"))
-                    
-                    message["headers"] = headers
-                    
-                    if not is_static:
-                        logger.info(f"Added CORS headers to response for {path}")
-            
-            await send(message)
-            
-        # Передаем запрос в приложение с оберткой для send
-        await self.app(scope, receive, send_wrapper)
+# Добавляем стандартный CORSMiddleware к приложению oTree
+from starlette.middleware.cors import CORSMiddleware
 
-# Добавляем стандартный CORSMiddleware (для совместимости с другими компонентами)
-logger.info("Applying standard CORSMiddleware")
+logger.info("Adding CORS middleware to oTree app")
 otree.asgi.app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", CORS_ALLOW_ORIGIN],  # Разрешаем любые источники для статических файлов
+    allow_origins=[CORS_ALLOW_ORIGIN, "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -123,9 +78,9 @@ otree.asgi.app.add_middleware(
     max_age=1728000
 )
 
-# Применяем наш кастомный middleware для OPTIONS запросов и статических файлов
-logger.info("Applying custom OptionsAndStaticCorsMiddleware")
-app = OptionsAndStaticCorsMiddleware(otree.asgi.app)
+# Применяем наш простой middleware для OPTIONS запросов
+logger.info("Applying OPTIONS middleware")
+app = OptionsMiddleware(otree.asgi.app)
 
 def main():
     # Получаем порт из переменных окружения (для Heroku)
@@ -139,7 +94,7 @@ def main():
         env=os.environ.copy()
     )
     
-    logger.info(f"Running custom prodserver with CORS on {addr}:{port}")
+    logger.info(f"Running prodserver with CORS on {addr}:{port}")
     
     # Запускаем Uvicorn напрямую с нашим модифицированным app
     # Точно соответствует конфигурации в prodserver1of2.py
