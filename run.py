@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 import os
-import sys
 import logging
-
+import subprocess
+import otree.asgi
+from otree.cli.prodserver1of2 import run_asgi_server, get_addr_port
+from starlette.staticfiles import StaticFiles
+from starlette.responses import Response
+from starlette.applications import Starlette
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -21,10 +25,9 @@ def run_otree_with_cors():
     """
     # IMPORTANT: We need to do all imports inside this function to ensure
     # we can monkey-patch modules before they're used by oTree
+
     
     # First, patch the StaticFiles class to add CORS support
-    from starlette.staticfiles import StaticFiles
-    from starlette.responses import Response
     
     # Save the original StaticFiles.__call__ method
     original_staticfiles_call = StaticFiles.__call__
@@ -89,10 +92,6 @@ def run_otree_with_cors():
     
     # Now, patch the OTreeStarlette to add CORS handling for non-static routes
     # We need to modify the class before it's instantiated in asgi.py
-    from starlette.applications import Starlette
-    
-    # First import otree.asgi to get the OTreeStarlette class
-    import otree.asgi
     
     # Save the original build_middleware_stack method
     original_build_middleware = otree.asgi.OTreeStarlette.build_middleware_stack
@@ -165,9 +164,6 @@ def run_otree_with_cors():
     # Now let oTree initialize itself with our patches in place
     logger.info("Starting oTree with CORS support at initialization time")
     
-    # Импортируем функции напрямую из модуля prodserver1of2
-    from otree.cli.prodserver1of2 import run_asgi_server, get_addr_port
-    
     # Запускаем сервер напрямую, как это делает prodserver1of2
     logger.info("Starting ASGI server directly")
     
@@ -175,9 +171,6 @@ def run_otree_with_cors():
     addr, port = get_addr_port(os.environ.get('PORT'))
     logger.info(f"Server will run on {addr}:{port}")
     
-    # Запускаем сервер
-    import subprocess
-    import os
     # Запускаем таймаут процесс, как это делает prodserver1of2
     subprocess.Popen(
         ['otree', 'timeoutsubprocess', str(port)], 
