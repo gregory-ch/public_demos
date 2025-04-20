@@ -26,8 +26,9 @@ def run_with_cors():
     # Import necessary modules from oTree and Starlette
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
-    from starlette.responses import HTMLResponse, PlainTextResponse, Response
-    from starlette.routing import Route, NoMatchFound
+    from starlette.responses import HTMLResponse, PlainTextResponse, Response, FileResponse
+    from starlette.routing import Route, NoMatchFound, Mount
+    from starlette.staticfiles import StaticFiles
     
     # Import oTree specific modules without importing the app instance
     import otree.errorpage
@@ -40,8 +41,8 @@ def run_with_cors():
     
     logger.info("Creating new oTree application with CORS support")
     
-    # Custom CORS middleware with static file optimization
-    class OptimizedCORSMiddleware:
+    # Custom CORS middleware for non-static routes
+    class CORSMiddleware:
         def __init__(self, app):
             self.app = app
         
@@ -54,10 +55,14 @@ def run_with_cors():
             path = scope.get("path", "")
             method = scope.get("method", "")
             
-            # Check if this is a static file request
-            is_static = path.startswith('/static/')
+            # Check if this is a static file request - bypass our middleware for static files
+            # The static files will be handled by the StaticFiles mount with CORS headers
+            if path.startswith('/static/'):
+                logger.info(f"CORSMiddleware bypassing for static request: {method} {path}")
+                await self.app(scope, receive, send)
+                return
             
-            logger.info(f"OptimizedCORSMiddleware handling {method} request for {path}")
+            logger.info(f"CORSMiddleware handling {method} request for {path}")
             
             # Handle OPTIONS requests directly
             if method == "OPTIONS":
@@ -81,54 +86,7 @@ def run_with_cors():
                 await response(scope, receive, send)
                 return
             
-            # For static files, use a simpler approach to avoid async conflicts
-            if is_static:
-                # For static files, we'll capture the response and add headers
-                # without wrapping the send function to avoid async conflicts
-                original_messages = []
-                
-                async def capture_send(message):
-                    original_messages.append(message)
-                
-                # Get the original response
-                await self.app(scope, receive, capture_send)
-                
-                # Now we can modify the headers and send
-                for message in original_messages:
-                    if message["type"] == "http.response.start":
-                        # Get original headers
-                        headers = list(message.get("headers", []))
-                        
-                        # Add CORS headers
-                        cors_headers = [
-                            (b'access-control-allow-origin', CORS_ALLOW_ORIGIN.encode()),
-                            (b'access-control-allow-methods', b'GET, POST, PUT, DELETE, OPTIONS'),
-                            (b'access-control-allow-headers', b'*'),
-                            (b'access-control-allow-credentials', b'true')
-                        ]
-                        
-                        # Add our CORS headers
-                        for header in cors_headers:
-                            # Check if header already exists
-                            exists = False
-                            for i, (name, _) in enumerate(headers):
-                                if name.lower() == header[0].lower():
-                                    exists = True
-                                    headers[i] = header
-                                    break
-                            if not exists:
-                                headers.append(header)
-                        
-                        # Update message with new headers
-                        message["headers"] = headers
-                    
-                    # Send the modified message
-                    await send(message)
-                
-                return
-            
-            # For non-static files, use the wrapped send approach
-            # For other methods, wrap the send function to add CORS headers
+            # For non-static, non-OPTIONS requests, wrap the send function to add CORS headers
             async def wrapped_send(message):
                 if message["type"] == "http.response.start":
                     # Get original headers
@@ -167,8 +125,75 @@ def run_with_cors():
             # Call app with wrapped send
             await self.app(scope, receive, wrapped_send)
     
-    # Define our version of OTreeStarlette that includes CORS middleware
+    # Custom StaticFiles class that adds CORS headers
+    class CORSStaticFiles(StaticFiles):
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                await super().__call__(scope, receive, send)
+                return
+                
+            path = scope.get("path", "")
+            method = scope.get("method", "")
+            
+            # Handle OPTIONS requests directly for static files too
+            if method == "OPTIONS":
+                logger.info(f"Handling OPTIONS request for static file: {path}")
+                
+                cors_headers = {
+                    "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Max-Age": "1728000",
+                    "Content-Type": "text/plain",
+                    "Content-Length": "0"
+                }
+                
+                response = PlainTextResponse("", status_code=200, headers=cors_headers)
+                await response(scope, receive, send)
+                return
+            
+            # For normal static file requests, intercept the send to add CORS headers
+            async def static_send_with_cors(message):
+                if message["type"] == "http.response.start":
+                    headers = list(message.get("headers", []))
+                    
+                    # Add CORS headers directly as bytes
+                    cors_headers = [
+                        (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
+                        (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
+                        (b"access-control-allow-headers", b"*"),
+                        (b"access-control-allow-credentials", b"true")
+                    ]
+                    
+                    # Add CORS headers
+                    for header in cors_headers:
+                        exists = False
+                        for i, (name, _) in enumerate(headers):
+                            if name.lower() == header[0].lower():
+                                exists = True
+                                headers[i] = header
+                                break
+                        if not exists:
+                            headers.append(header)
+                    
+                    # Update headers
+                    message["headers"] = headers
+                
+                # Send the message
+                await send(message)
+            
+            # Handle the static file request with our wrapper
+            await super().__call__(scope, receive, static_send_with_cors)
+    
+    # Define our version of OTreeStarlette with static file handling
     class OTreeStarletteWithCORS(Starlette):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            
+            # Save the original router for future reference
+            self.original_router = self.router
+        
         def build_middleware_stack(self):
             debug = self.debug
             error_handler = None
@@ -180,7 +205,7 @@ def run_with_cors():
                 else:
                     exception_handlers[key] = value
             
-            # Create middleware stack with our custom CORS middleware first
+            # Create middleware stack (no CORS middleware here yet)
             middlewares = [
                 # Original oTree middleware stack
                 Middleware(otree.middleware.CommitTransactionMiddleware),
@@ -198,7 +223,7 @@ def run_with_cors():
                 app = cls(app=app, **options)
             
             # Add our custom CORS middleware at the very end (runs first)
-            app = OptimizedCORSMiddleware(app)
+            app = CORSMiddleware(app)
             
             logger.info("Successfully built middleware stack with CORS middleware")
             return app
@@ -242,8 +267,17 @@ def run_with_cors():
             "Access-Control-Max-Age": "1728000",
         })
     
-    # Add our routes
+    # Create routes with our custom static files handler
+    # Get original routes from otree
     custom_routes = list(otree.urls.routes)
+    
+    # Create a special mount for static files
+    # This bypasses the middleware stack completely for static files
+    static_path = os.path.join(os.getcwd(), 'static')
+    if os.path.exists(static_path):
+        logger.info(f"Mounting static files from {static_path}")
+        static_mount = Mount('/static', app=CORSStaticFiles(directory=static_path, check_dir=False))
+        custom_routes.append(static_mount)
     
     # Add catch-all OPTIONS route
     custom_routes.append(
