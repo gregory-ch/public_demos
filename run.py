@@ -147,10 +147,18 @@ def run_otree_with_cors():
     # After patching, import and run otree using standard command
     logger.info("Starting oTree with patched static files...")
     
-    # Use otree's built-in command handling - use 'prodserver' instead of 'runprodserver'
-    from otree.main import execute_from_command_line
-    sys.argv = ['otree', 'prodserver', os.environ.get('PORT', '8000')]
-    execute_from_command_line()
+    # Directly import the command runner and execute
+    from otree.cli.prodserver1of2 import Command
+    
+    # Get port from environment or default to 8000
+    port = os.environ.get('PORT', '8000')
+    
+    # Create and run the command - this is how otree.main does it
+    command = Command()
+    logger.info(f"Running oTree prodserver on port {port}")
+    
+    # The command expects an optional addrport argument (format: [host:]port)
+    command.handle(addrport=port)
 
 if __name__ == "__main__":
     run_otree_with_cors() 
