@@ -2,7 +2,9 @@
 import os
 import sys
 import logging
-import subprocess
+import importlib
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 
 # Настройка логирования
 logging.basicConfig(
@@ -16,60 +18,55 @@ logger.info("=== Starting oTree with CORS support ===")
 CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
 logger.info(f"CORS allowed origin: {CORS_ALLOW_ORIGIN}")
 
-def run_standard_prodserver():
-    """Запуск стандартного oTree prodserver с минимальными модификациями для CORS"""
+def patch_otree_for_cors():
+    """Patch oTree's middleware stack to include CORS middleware"""
     
-    # Подготавливаем ASGI приложение для обработки CORS
-    logger.info("Setting up CORS support for oTree")
+    # Import the original OTreeStarlette class
+    from otree.asgi import OTreeStarlette
     
-    # Создаем простой HTTP-сервер для обработки OPTIONS запросов
-    from http.server import HTTPServer, BaseHTTPRequestHandler
-    import threading
+    # Store the original build_middleware_stack method
+    original_build_middleware_stack = OTreeStarlette.build_middleware_stack
     
-    class CORSHandler(BaseHTTPRequestHandler):
-        def do_OPTIONS(self):
-            self.send_response(200)
-            self.send_header('Access-Control-Allow-Origin', CORS_ALLOW_ORIGIN)
-            self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers', '*')
-            self.send_header('Access-Control-Allow-Credentials', 'true')
-            self.send_header('Access-Control-Max-Age', '1728000')
-            self.send_header('Content-Type', 'text/plain')
-            self.send_header('Content-Length', '0')
-            self.end_headers()
+    # Create patched method that adds our CORS middleware
+    def patched_build_middleware_stack(self):
+        logger.info("Patching oTree middleware stack to add CORS support")
+        
+        # Call the original method to get the middleware list
+        middlewares = [
+            Middleware(CORSMiddleware,
+                allow_origins=[CORS_ALLOW_ORIGIN],
+                allow_methods=["*"],
+                allow_headers=["*"],
+                allow_credentials=True,
+                expose_headers=["*"])
+        ]
+        
+        # Get middleware stack from original method
+        app = original_build_middleware_stack(self)
+        
+        # Add our CORS middleware at the very beginning (outside all other middleware)
+        for cls, options in reversed(middlewares):
+            app = cls(app=app, **options)
+        
+        logger.info("Successfully added CORS middleware to oTree")
+        return app
     
-    def run_options_server():
-        # Запускаем на том же порту, что и основной сервер
-        # Heroku будет перенаправлять OPTIONS запросы сюда
-        port = int(os.environ.get('PORT_OPTIONS', '8001'))
-        logger.info(f"Starting OPTIONS handler server on port {port}")
-        try:
-            server = HTTPServer(('0.0.0.0', port), CORSHandler)
-            server.serve_forever()
-        except Exception as e:
-            logger.error(f"Error starting OPTIONS server: {e}")
+    # Replace the original method with our patched version
+    OTreeStarlette.build_middleware_stack = patched_build_middleware_stack
+    logger.info("OTreeStarlette.build_middleware_stack method has been patched")
+
+def run_server_with_cors():
+    """Run standard oTree prodserver with CORS patch applied"""
     
-    # Запускаем OPTIONS сервер в отдельном потоке
-    options_thread = threading.Thread(target=run_options_server, daemon=True)
-    options_thread.start()
-    logger.info("Started OPTIONS handler in background thread")
+    # Apply our patch to oTree before anything else is imported
+    patch_otree_for_cors()
     
-    # Запускаем стандартный prodserver
-    logger.info("Starting standard oTree prodserver")
-    port = os.environ.get('PORT', '8000')
+    # Import and run the standard prodserver code
+    from otree.cli.prodserver1of2 import Command
     
-    # Используем напрямую код из prodserver1of2.py
-    from otree.cli.prodserver1of2 import run_uvicorn, print_function
-    
-    # Запускаем timeoutsubprocess
-    subprocess.Popen(
-        ['otree', 'timeoutsubprocess', str(port)], 
-        env=os.environ.copy()
-    )
-    
-    # Запускаем uvicorn со standard app
-    print_function('Running standard oTree prodserver')
-    run_uvicorn('0.0.0.0', port, is_devserver=False)
+    logger.info("Starting oTree prodserver with CORS patch")
+    cmd = Command()
+    cmd.handle()
 
 if __name__ == "__main__":
-    run_standard_prodserver() 
+    run_server_with_cors() 
