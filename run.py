@@ -165,15 +165,27 @@ def run_otree_with_cors():
     # Now let oTree initialize itself with our patches in place
     logger.info("Starting oTree with CORS support at initialization time")
     
-    # Get the port from the environment
-    port = os.environ.get('PORT', '8000')
-    logger.info(f"Starting oTree server on port {port}")
+    # Импортируем функции напрямую из модуля prodserver1of2
+    from otree.cli.prodserver1of2 import run_asgi_server, get_addr_port
     
-    # Use otree's built-in command handler - для oTree 5+
-    from otree.main import execute_from_command_line
-    # Используем prodserver1of2 для oTree 5+ с портом как опцией
-    sys.argv = ['otree', 'prodserver1of2', '--port', port]
-    execute_from_command_line()
+    # Запускаем сервер напрямую, как это делает prodserver1of2
+    logger.info("Starting ASGI server directly")
+    
+    # Получаем адрес и порт
+    addr, port = get_addr_port(os.environ.get('PORT'))
+    logger.info(f"Server will run on {addr}:{port}")
+    
+    # Запускаем сервер
+    import subprocess
+    import os
+    # Запускаем таймаут процесс, как это делает prodserver1of2
+    subprocess.Popen(
+        ['otree', 'timeoutsubprocess', str(port)], 
+        env=os.environ.copy()
+    )
+    
+    # Запускаем ASGI сервер
+    run_asgi_server(addr, port, is_devserver=False)
 
 if __name__ == "__main__":
     run_otree_with_cors() 
