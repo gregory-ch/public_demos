@@ -21,16 +21,18 @@ logger.info(f"CORS allowed origin: {CORS_ALLOW_ORIGIN}")
 
 def run_otree_with_cors():
     """
-    Run oTree with CORS support by patching the static_files_app before it's mounted
+    Run oTree with CORS support by patching both static files and main app
     """
     # First, import starlette components we need
     from starlette.staticfiles import StaticFiles
     from starlette.responses import Response
+    from starlette.middleware import Middleware
     
     # Import otree modules but NOT the app itself
     import otree
     import otree.settings
-    
+
+    # 1. Patch static files handler with CORS support
     # Create a wrapper for StaticFiles that adds CORS headers
     class CORSStaticFiles(StaticFiles):
         """
@@ -136,7 +138,6 @@ def run_otree_with_cors():
     )
     
     # Now, patch otree.common2.static_files_app with our CORS version
-    # This must be done before the app creates its routes
     from otree import common2
     logger.info("Patching otree.common2.static_files_app with CORS support")
     common2.static_files_app = static_files_app_with_cors
@@ -144,8 +145,98 @@ def run_otree_with_cors():
     # Verify the patch was successful
     logger.info(f"Static files app is now: {type(common2.static_files_app).__name__}")
     
-    # After patching, import and run otree using standard command
-    logger.info("Starting oTree with patched static files...")
+    # 2. Patch the main application to add CORS middleware
+    # First, we create a CORS middleware for the main app
+    class CORSMiddleware:
+        """
+        Middleware that adds CORS headers to all responses and handles OPTIONS requests
+        """
+        def __init__(self, app):
+            self.app = app
+        
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                await self.app(scope, receive, send)
+                return
+                
+            method = scope.get("method", "")
+            path = scope.get("path", "")
+            
+            # Special handling for OPTIONS requests (preflight)
+            if method == "OPTIONS":
+                logger.info(f"Handling OPTIONS request for path: {path}")
+                
+                # Send a response with CORS headers
+                response = Response(
+                    content="",
+                    status_code=200,
+                    headers={
+                        "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
+                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                        "Access-Control-Allow-Headers": "*",
+                        "Access-Control-Allow-Credentials": "true",
+                        "Access-Control-Max-Age": "1728000",
+                    }
+                )
+                await response(scope, receive, send)
+                return
+            
+            # For regular requests, wrap the send function to add CORS headers
+            async def send_with_cors(message):
+                if message["type"] == "http.response.start":
+                    # Get original headers
+                    headers = list(message.get("headers", []))
+                    
+                    # Add CORS headers
+                    cors_headers = [
+                        (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
+                        (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
+                        (b"access-control-allow-headers", b"*"),
+                        (b"access-control-allow-credentials", b"true"),
+                    ]
+                    
+                    # Debug log the original headers
+                    header_dict = {name.decode(): value.decode() for name, value in headers}
+                    logger.info(f"Original headers for {path}: {header_dict}")
+                    
+                    # Add or replace headers
+                    for new_header in cors_headers:
+                        exists = False
+                        for i, (name, _) in enumerate(headers):
+                            if name.lower() == new_header[0].lower():
+                                exists = True
+                                headers[i] = new_header
+                                break
+                        if not exists:
+                            headers.append(new_header)
+                    
+                    # Debug log the modified headers
+                    new_header_dict = {name.decode(): value.decode() for name, value in headers}
+                    logger.info(f"Modified headers for {path}: {new_header_dict}")
+                    
+                    # Update headers in message
+                    message["headers"] = headers
+                
+                # Send the modified message
+                await send(message)
+            
+            # Call the original app with our modified send function
+            await self.app(scope, receive, send_with_cors)
+    
+    # Now patch the main ASGI application with our CORS middleware
+    # We need to import it here after patching the static files app
+    from otree import asgi
+    logger.info("Patching main oTree ASGI application with CORS middleware")
+    
+    # Save the original app
+    original_app = asgi.app
+    
+    # Replace it with our wrapped version
+    asgi.app = CORSMiddleware(original_app)
+    logger.info("Main oTree application patched with CORS middleware")
+    
+    # After patching, run oTree using the command
+    logger.info("Starting oTree with CORS support for both static files and main app...")
     
     # Directly import the command runner and execute
     from otree.cli.prodserver1of2 import Command
@@ -153,7 +244,7 @@ def run_otree_with_cors():
     # Get port from environment or default to 8000
     port = os.environ.get('PORT', '8000')
     
-    # Create and run the command - this is how otree.main does it
+    # Create and run the command
     command = Command()
     logger.info(f"Running oTree prodserver on port {port}")
     
