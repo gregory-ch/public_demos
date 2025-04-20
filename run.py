@@ -6,7 +6,7 @@ import importlib
 import subprocess
 from copy import deepcopy
 
-# Настройка логирования
+# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='[OTREE-CORS] %(asctime)s - %(levelname)s - %(message)s'
@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger('otree_cors')
 logger.info("=== Starting oTree with CORS support ===")
 
-# Получаем разрешенный домен для CORS из переменных окружения
+# Get allowed domain for CORS from environment variables
 CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
 logger.info(f"CORS allowed origin: {CORS_ALLOW_ORIGIN}")
 
@@ -26,12 +26,10 @@ def run_with_cors():
     # Import necessary modules from oTree and Starlette
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
-    from starlette.middleware.cors import CORSMiddleware
-    from starlette.responses import HTMLResponse
+    from starlette.responses import HTMLResponse, PlainTextResponse
+    from starlette.routing import Route, NoMatchFound
     
     # Import oTree specific modules without importing the app instance
-    # We need to avoid importing app from otree.asgi as that would give us the
-    # already-constructed instance
     import otree.errorpage
     import otree.database
     import otree.middleware
@@ -41,6 +39,82 @@ def run_with_cors():
     import otree.urls
     
     logger.info("Creating new oTree application with CORS support")
+    
+    # Custom CORS middleware with debugging
+    class DebugCORSMiddleware:
+        def __init__(self, app):
+            self.app = app
+        
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                await self.app(scope, receive, send)
+                return
+            
+            path = scope.get("path", "")
+            method = scope.get("method", "")
+            
+            logger.info(f"DebugCORSMiddleware handling {method} request for {path}")
+            
+            # Handle OPTIONS requests directly
+            if method == "OPTIONS":
+                logger.info(f"Handling OPTIONS request for {path}")
+                
+                # Create a response with CORS headers
+                cors_headers = {
+                    "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Max-Age": "1728000",
+                    "Content-Type": "text/plain",
+                    "Content-Length": "0"
+                }
+                
+                # Log headers for debugging
+                logger.info(f"Sending CORS headers for OPTIONS: {cors_headers}")
+                
+                response = PlainTextResponse("", status_code=200, headers=cors_headers)
+                await response(scope, receive, send)
+                return
+            
+            # For other methods, wrap the send function to add CORS headers
+            async def wrapped_send(message):
+                if message["type"] == "http.response.start":
+                    # Get original headers
+                    orig_headers = message.get("headers", [])
+                    headers = {}
+                    
+                    # Convert to dict for easier manipulation
+                    for name, value in orig_headers:
+                        name_str = name.decode() if isinstance(name, bytes) else name
+                        value_str = value.decode() if isinstance(value, bytes) else value
+                        headers[name_str.lower()] = value_str
+                    
+                    # Add CORS headers
+                    headers["access-control-allow-origin"] = CORS_ALLOW_ORIGIN
+                    headers["access-control-allow-methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+                    headers["access-control-allow-headers"] = "*"
+                    headers["access-control-allow-credentials"] = "true"
+                    
+                    # Convert back to list of tuples
+                    new_headers = []
+                    for name, value in headers.items():
+                        new_headers.append((
+                            name.encode() if isinstance(name, str) else name,
+                            value.encode() if isinstance(value, str) else value
+                        ))
+                    
+                    # Log headers for debugging
+                    logger.info(f"Adding CORS headers to {method} response for {path}")
+                    logger.info(f"Final headers: {headers}")
+                    
+                    # Update message with new headers
+                    message["headers"] = new_headers
+                
+                await send(message)
+            
+            # Call app with wrapped send
+            await self.app(scope, receive, wrapped_send)
     
     # Define our version of OTreeStarlette that includes CORS middleware
     class OTreeStarletteWithCORS(Starlette):
@@ -55,15 +129,8 @@ def run_with_cors():
                 else:
                     exception_handlers[key] = value
             
-            # Create middleware stack identical to oTree's but with our CORS middleware
+            # Create middleware stack with our custom CORS middleware first
             middlewares = [
-                # Add CORS middleware at the very beginning
-                Middleware(CORSMiddleware,
-                    allow_origins=[CORS_ALLOW_ORIGIN],
-                    allow_methods=["*"],
-                    allow_headers=["*"],
-                    allow_credentials=True),
-                
                 # Original oTree middleware stack
                 Middleware(otree.middleware.CommitTransactionMiddleware),
                 Middleware(OTreeServerErrorMiddleware, handler=error_handler, debug=debug),
@@ -72,9 +139,15 @@ def run_with_cors():
                 Middleware(ExceptionMiddleware, handlers=exception_handlers, debug=debug),
             ]
             
+            logger.info("Building middleware stack with CORS support")
+            
+            # Build the middleware stack
             app = self.router
             for cls, options in reversed(middlewares):
                 app = cls(app=app, **options)
+            
+            # Add our custom CORS middleware at the very end (runs first)
+            app = DebugCORSMiddleware(app)
             
             logger.info("Successfully built middleware stack with CORS middleware")
             return app
@@ -107,17 +180,36 @@ def run_with_cors():
             status_code=ERR_500
         )
     
+    # Add route for direct OPTIONS handling
+    async def handle_options(request):
+        logger.info(f"Direct route handler for OPTIONS at {request.url.path}")
+        return PlainTextResponse("", headers={
+            "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "1728000",
+        })
+    
+    # Add our routes
+    custom_routes = list(otree.urls.routes)
+    
+    # Add catch-all OPTIONS route
+    custom_routes.append(
+        Route("/{path:path}", endpoint=handle_options, methods=["OPTIONS"])
+    )
+    
     # Create a new instance of our custom application class
     custom_app = OTreeStarletteWithCORS(
         debug=otree.settings.DEBUG,
-        routes=otree.urls.routes,
+        routes=custom_routes,
         exception_handlers={ERR_500: server_error},
         on_shutdown=[otree.database.save_sqlite_db],
     )
     
     logger.info("Successfully created oTree application with CORS support")
     
-    # Run the application using uvicorn (same way as in prodserver1of2.py)
+    # Run the application using uvicorn
     port = os.environ.get('PORT', '8000')
     addr = '0.0.0.0'
     
@@ -129,7 +221,7 @@ def run_with_cors():
     )
     
     # Start uvicorn with our custom application
-    logger.info(f"Starting uvicorn with custom app on {addr}:{port}")
+    logger.info(f"Starting uvicorn with custom CORS-enabled app on {addr}:{port}")
     from uvicorn.main import Config, Server
     
     config = Config(
@@ -137,7 +229,7 @@ def run_with_cors():
         host=addr,
         port=int(port),
         log_level="info",
-        log_config=None,  # oTree has its own logger
+        log_config=None,
         workers=1,
         ws='websockets',
     )
