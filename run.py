@@ -7,6 +7,11 @@ from otree.cli.prodserver1of2 import run_asgi_server, get_addr_port
 from starlette.staticfiles import StaticFiles
 from starlette.responses import Response
 from starlette.applications import Starlette
+from starlette.routing import Mount
+from starlette.types import ASGIApp, Receive, Scope, Send
+import uvicorn
+import asyncio
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -19,30 +24,20 @@ logger.info("=== Starting oTree with CORS support ===")
 CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
 logger.info(f"CORS allowed origin: {CORS_ALLOW_ORIGIN}")
 
-def run_otree_with_cors():
+class CORSStaticFiles(StaticFiles):
     """
-    Run oTree with CORS support by safely integrating CORS headers at initialization time
+    Расширенная версия StaticFiles с поддержкой CORS и обработкой OPTIONS запросов
     """
-    # IMPORTANT: We need to do all imports inside this function to ensure
-    # we can monkey-patch modules before they're used by oTree
-
-    
-    # First, patch the StaticFiles class to add CORS support
-    
-    # Save the original StaticFiles.__call__ method
-    original_staticfiles_call = StaticFiles.__call__
-    
-    # Create a new __call__ method that adds CORS headers
-    async def cors_staticfiles_call(self, scope, receive, send):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
-            return await original_staticfiles_call(self, scope, receive, send)
+            return await super().__call__(scope, receive, send)
             
         method = scope.get("method", "")
         path = scope.get("path", "")
         
         # Handle OPTIONS requests directly
         if method == "OPTIONS":
-            logger.info(f"StaticFiles: Handling OPTIONS request for {path}")
+            logger.info(f"CORSStaticFiles: Handling OPTIONS request for {path}")
             response = Response(
                 content="",
                 status_code=200,
@@ -56,7 +51,7 @@ def run_otree_with_cors():
             )
             return await response(scope, receive, send)
         
-        # For regular requests, add CORS headers to the response
+        # For other requests, add CORS headers after StaticFiles processing
         async def send_with_cors(message):
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
@@ -84,16 +79,37 @@ def run_otree_with_cors():
             
             await send(message)
         
-        return await original_staticfiles_call(self, scope, receive, send_with_cors)
+        return await super().__call__(scope, receive, send_with_cors)
+
+class RootApp:
+    """
+    Корневое приложение, которое перенаправляет запросы к статическим файлам 
+    и другие запросы по разным путям обработки
+    """
+    def __init__(self, otree_app: ASGIApp, static_app: ASGIApp):
+        self.otree_app = otree_app
+        self.static_app = static_app
     
-    # Replace the original __call__ method with our patched version
-    StaticFiles.__call__ = cors_staticfiles_call
-    logger.info("Patched StaticFiles.__call__ with CORS support")
-    
-    # Now, patch the OTreeStarlette to add CORS handling for non-static routes
-    # We need to modify the class before it's instantiated in asgi.py
-    
-    # Save the original build_middleware_stack method
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            return await self.otree_app(scope, receive, send)
+            
+        path = scope["path"]
+        
+        # Перенаправляем запросы к статическим файлам на наше отдельное приложение,
+        # минуя middleware oTree с блокировками
+        if path.startswith("/static/"):
+            logger.info(f"RootApp: Routing static request {path} to separate static app")
+            return await self.static_app(scope, receive, send)
+        
+        # Все остальные запросы идут к основному приложению oTree
+        return await self.otree_app(scope, receive, send)
+
+def run_otree_with_cors():
+    """
+    Run oTree with CORS support by safely integrating CORS headers at initialization time
+    """
+    # Patch OTreeStarlette.build_middleware_stack for normal requests
     original_build_middleware = otree.asgi.OTreeStarlette.build_middleware_stack
     
     # Create a new build_middleware_stack method that adds CORS handling
@@ -161,24 +177,45 @@ def run_otree_with_cors():
     otree.asgi.OTreeStarlette.build_middleware_stack = build_middleware_with_cors
     logger.info("Patched OTreeStarlette.build_middleware_stack with CORS support")
     
-    # Now let oTree initialize itself with our patches in place
-    logger.info("Starting oTree with CORS support at initialization time")
+    # Now let's initialize oTree itself and get the app instance
+    from otree.asgi import app as otree_app
     
-    # Запускаем сервер напрямую, как это делает prodserver1of2
-    logger.info("Starting ASGI server directly")
+    # Create our own static files app with CORS support
+    # It will skip middleware that uses lock2
+    from otree.common2 import static_files_app as original_static_app
     
-    # Получаем адрес и порт
+    # Create our own static files app with the same directory configuration but CORS support
+    static_app_with_cors = CORSStaticFiles(
+        directory=original_static_app.directory,
+        packages=original_static_app.packages
+    )
+    
+    # Create a root application that routes requests appropriately
+    root_app = RootApp(otree_app, static_app_with_cors)
+    
+    # Get the port from the environment
     addr, port = get_addr_port(os.environ.get('PORT'))
-    logger.info(f"Server will run on {addr}:{port}")
+    logger.info(f"Starting server on {addr}:{port}")
     
-    # Запускаем таймаут процесс, как это делает prodserver1of2
+    # Start the timeout subprocess
     subprocess.Popen(
         ['otree', 'timeoutsubprocess', str(port)], 
         env=os.environ.copy()
     )
     
-    # Запускаем ASGI сервер
-    run_asgi_server(addr, port, is_devserver=False)
+    # Configure and run Uvicorn directly instead of using run_asgi_server
+    logger.info("Starting Uvicorn with custom app")
+    config = uvicorn.Config(
+        app=root_app,
+        host=addr,
+        port=int(port),
+        log_level="info",
+        log_config=None,
+        workers=1,
+        ws='websockets',
+    )
+    server = uvicorn.Server(config=config)
+    server.run()
 
 if __name__ == "__main__":
     run_otree_with_cors() 
