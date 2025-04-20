@@ -26,7 +26,7 @@ def run_with_cors():
     # Import necessary modules from oTree and Starlette
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
-    from starlette.responses import HTMLResponse, PlainTextResponse
+    from starlette.responses import HTMLResponse, PlainTextResponse, Response
     from starlette.routing import Route, NoMatchFound
     
     # Import oTree specific modules without importing the app instance
@@ -40,20 +40,24 @@ def run_with_cors():
     
     logger.info("Creating new oTree application with CORS support")
     
-    # Custom CORS middleware with debugging
-    class DebugCORSMiddleware:
+    # Custom CORS middleware with static file optimization
+    class OptimizedCORSMiddleware:
         def __init__(self, app):
             self.app = app
         
         async def __call__(self, scope, receive, send):
             if scope["type"] != "http":
+                # Pass through WebSocket and lifespan messages unchanged
                 await self.app(scope, receive, send)
                 return
             
             path = scope.get("path", "")
             method = scope.get("method", "")
             
-            logger.info(f"DebugCORSMiddleware handling {method} request for {path}")
+            # Check if this is a static file request
+            is_static = path.startswith('/static/')
+            
+            logger.info(f"OptimizedCORSMiddleware handling {method} request for {path}")
             
             # Handle OPTIONS requests directly
             if method == "OPTIONS":
@@ -77,6 +81,53 @@ def run_with_cors():
                 await response(scope, receive, send)
                 return
             
+            # For static files, use a simpler approach to avoid async conflicts
+            if is_static:
+                # For static files, we'll capture the response and add headers
+                # without wrapping the send function to avoid async conflicts
+                original_messages = []
+                
+                async def capture_send(message):
+                    original_messages.append(message)
+                
+                # Get the original response
+                await self.app(scope, receive, capture_send)
+                
+                # Now we can modify the headers and send
+                for message in original_messages:
+                    if message["type"] == "http.response.start":
+                        # Get original headers
+                        headers = list(message.get("headers", []))
+                        
+                        # Add CORS headers
+                        cors_headers = [
+                            (b'access-control-allow-origin', CORS_ALLOW_ORIGIN.encode()),
+                            (b'access-control-allow-methods', b'GET, POST, PUT, DELETE, OPTIONS'),
+                            (b'access-control-allow-headers', b'*'),
+                            (b'access-control-allow-credentials', b'true')
+                        ]
+                        
+                        # Add our CORS headers
+                        for header in cors_headers:
+                            # Check if header already exists
+                            exists = False
+                            for i, (name, _) in enumerate(headers):
+                                if name.lower() == header[0].lower():
+                                    exists = True
+                                    headers[i] = header
+                                    break
+                            if not exists:
+                                headers.append(header)
+                        
+                        # Update message with new headers
+                        message["headers"] = headers
+                    
+                    # Send the modified message
+                    await send(message)
+                
+                return
+            
+            # For non-static files, use the wrapped send approach
             # For other methods, wrap the send function to add CORS headers
             async def wrapped_send(message):
                 if message["type"] == "http.response.start":
@@ -147,7 +198,7 @@ def run_with_cors():
                 app = cls(app=app, **options)
             
             # Add our custom CORS middleware at the very end (runs first)
-            app = DebugCORSMiddleware(app)
+            app = OptimizedCORSMiddleware(app)
             
             logger.info("Successfully built middleware stack with CORS middleware")
             return app
