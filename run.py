@@ -44,8 +44,12 @@ def run_with_cors():
     
     logger.info("Creating new oTree application with CORS support")
     
-    # Simple HTTP handler for OPTIONS requests
-    class CORSMiddleware:
+    # Conditional middleware that only applies CORS to non-static requests
+    class ConditionalCORSMiddleware:
+        """
+        Middleware that applies CORS headers only to non-static requests,
+        leaving static file requests to be handled by the native oTree mechanisms.
+        """
         def __init__(self, app):
             self.app = app
         
@@ -58,15 +62,16 @@ def run_with_cors():
             path = scope.get("path", "")
             method = scope.get("method", "")
             
-            # If this is a static file request, bypass all middleware
+            # If this is a static file request, pass through to native oTree handler
             if path.startswith('/static/'):
-                logger.info(f"CORSMiddleware bypassing for static file: {method} {path}")
+                logger.info(f"ConditionalCORSMiddleware bypassing for static file: {method} {path}")
                 await self.app(scope, receive, send)
                 return
             
-            logger.info(f"CORSMiddleware handling {method} request for {path}")
+            # For dynamic requests, let's process them with CORS headers
+            logger.info(f"ConditionalCORSMiddleware handling {method} request for {path}")
             
-            # Handle OPTIONS requests directly
+            # Handle OPTIONS requests directly (preflight requests)
             if method == "OPTIONS":
                 logger.info(f"Handling OPTIONS request for {path}")
                 
@@ -88,7 +93,7 @@ def run_with_cors():
                 await response(scope, receive, send)
                 return
             
-            # For non-OPTIONS requests, wrap the send function to add CORS headers
+            # For regular requests, wrap the send function to add CORS headers
             async def wrapped_send(message):
                 if message["type"] == "http.response.start":
                     # Get original headers
@@ -127,7 +132,7 @@ def run_with_cors():
             # Call app with wrapped send
             await self.app(scope, receive, wrapped_send)
     
-    # Define our version of OTreeStarlette with special handling for static files
+    # Define our version of OTreeStarlette to inject our middleware
     class OTreeStarletteWithCORS(Starlette):
         def build_middleware_stack(self):
             debug = self.debug
@@ -150,7 +155,7 @@ def run_with_cors():
                 Middleware(ExceptionMiddleware, handlers=exception_handlers, debug=debug),
             ]
             
-            logger.info("Building middleware stack with CORS support")
+            logger.info("Building middleware stack with conditional CORS support")
             
             # Build the middleware stack
             app = self.router
@@ -158,9 +163,9 @@ def run_with_cors():
                 app = cls(app=app, **options)
             
             # Add our custom CORS middleware at the very end (runs first)
-            app = CORSMiddleware(app)
+            app = ConditionalCORSMiddleware(app)
             
-            logger.info("Successfully built middleware stack with CORS middleware")
+            logger.info("Successfully built middleware stack with conditional CORS middleware")
             return app
     
     # Define server error handler (same as in otree.asgi)
@@ -218,165 +223,6 @@ def run_with_cors():
     
     logger.info("Successfully created oTree application with CORS support")
     
-    # Create a separate static file server to handle static requests with CORS
-    class StaticFileServer:
-        def __init__(self, root_dir='static'):
-            self.root_dir = root_dir
-            self._mimetypes = {
-                '.html': 'text/html',
-                '.css': 'text/css',
-                '.js': 'application/javascript',
-                '.json': 'application/json',
-                '.png': 'image/png',
-                '.jpg': 'image/jpeg',
-                '.jpeg': 'image/jpeg',
-                '.gif': 'image/gif',
-                '.svg': 'image/svg+xml',
-                '.ico': 'image/x-icon',
-                '.woff': 'font/woff',
-                '.woff2': 'font/woff2',
-                '.ttf': 'font/ttf',
-                '.eot': 'application/vnd.ms-fontobject',
-                '.otf': 'font/otf',
-                '.txt': 'text/plain',
-            }
-            
-        def guess_type(self, path):
-            import os
-            ext = os.path.splitext(path)[1].lower()
-            return self._mimetypes.get(ext, 'application/octet-stream')
-        
-        async def handle_request(self, request, scope, receive, send):
-            """Handle a request to the static file server"""
-            method = scope.get("method", "")
-            path = scope.get("path", "")
-            
-            # Remove /static/ from the path
-            if path.startswith('/static/'):
-                file_path = path[8:]
-            else:
-                file_path = path
-            
-            # Full path to the file
-            full_path = os.path.join(self.root_dir, file_path)
-            
-            # Handle OPTIONS request
-            if method == "OPTIONS":
-                await send({
-                    "type": "http.response.start",
-                    "status": 200,
-                    "headers": [
-                        (b"content-type", b"text/plain"),
-                        (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
-                        (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                        (b"access-control-allow-headers", b"*"),
-                        (b"access-control-allow-credentials", b"true"),
-                        (b"access-control-max-age", b"1728000"),
-                        (b"content-length", b"0"),
-                    ],
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": b"",
-                })
-                return
-            
-            # Check if file exists
-            if not os.path.isfile(full_path):
-                logger.error(f"Static file not found: {full_path}")
-                await send({
-                    "type": "http.response.start",
-                    "status": 404,
-                    "headers": [
-                        (b"content-type", b"text/plain"),
-                        (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
-                        (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                        (b"access-control-allow-headers", b"*"),
-                        (b"access-control-allow-credentials", b"true"),
-                    ],
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": b"File not found",
-                })
-                return
-            
-            # Read the file
-            try:
-                with open(full_path, 'rb') as f:
-                    content = f.read()
-                
-                content_type = self.guess_type(full_path)
-                
-                # Send the response
-                await send({
-                    "type": "http.response.start",
-                    "status": 200,
-                    "headers": [
-                        (b"content-type", content_type.encode()),
-                        (b"content-length", str(len(content)).encode()),
-                        (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
-                        (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                        (b"access-control-allow-headers", b"*"),
-                        (b"access-control-allow-credentials", b"true"),
-                    ],
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": content,
-                })
-            except Exception as e:
-                logger.error(f"Error serving static file {full_path}: {e}")
-                await send({
-                    "type": "http.response.start",
-                    "status": 500,
-                    "headers": [
-                        (b"content-type", b"text/plain"),
-                        (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
-                        (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                        (b"access-control-allow-headers", b"*"),
-                        (b"access-control-allow-credentials", b"true"),
-                    ],
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": f"Error serving static file: {str(e)}".encode(),
-                })
-    
-    # Create ASGI application that routes static requests to the static file server
-    # and everything else to the oTree application
-    static_server = StaticFileServer(root_dir=os.path.join(os.getcwd(), 'static'))
-    
-    async def combined_app(scope, receive, send):
-        """Combined application that handles both static files and oTree requests"""
-        path = scope.get("path", "")
-        
-        # If this is a static file request, handle it with the static file server
-        if path.startswith('/static/'):
-            logger.info(f"Using static file server for {path}")
-            try:
-                await static_server.handle_request(None, scope, receive, send)
-            except Exception as e:
-                logger.error(f"Error in static file server: {e}")
-                await send({
-                    "type": "http.response.start",
-                    "status": 500,
-                    "headers": [
-                        (b"content-type", b"text/plain"),
-                        (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
-                        (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                        (b"access-control-allow-headers", b"*"),
-                        (b"access-control-allow-credentials", b"true"),
-                    ],
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": f"Internal server error: {str(e)}".encode(),
-                })
-        else:
-            # Handle with regular oTree app
-            await custom_app(scope, receive, send)
-    
     # Run the application using uvicorn
     port = os.environ.get('PORT', '8000')
     addr = '0.0.0.0'
@@ -388,12 +234,12 @@ def run_with_cors():
         env=os.environ.copy()
     )
     
-    # Start uvicorn with our combined application
+    # Start uvicorn with our custom application
     logger.info(f"Starting uvicorn with CORS-enabled app on {addr}:{port}")
     from uvicorn.main import Config, Server
     
     config = Config(
-        app=combined_app,
+        app=custom_app,
         host=addr,
         port=int(port),
         log_level="info",
