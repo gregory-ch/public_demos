@@ -9,6 +9,8 @@ from starlette.responses import Response
 from starlette.applications import Starlette
 from starlette.routing import Mount
 from starlette.types import ASGIApp, Receive, Scope, Send
+from otree.common2 import OTreeStaticFiles
+import importlib.util
 import uvicorn
 import asyncio
 
@@ -24,9 +26,9 @@ logger.info("=== Starting oTree with CORS support ===")
 CORS_ALLOW_ORIGIN = os.environ.get('CORS_ALLOW_ORIGIN', 'https://gregory-ch.github.io')
 logger.info(f"CORS allowed origin: {CORS_ALLOW_ORIGIN}")
 
-class CORSStaticFiles(StaticFiles):
+class CORSStaticFiles(OTreeStaticFiles):
     """
-    Расширенная версия StaticFiles с поддержкой CORS и обработкой OPTIONS запросов
+    Расширенная версия OTreeStaticFiles с поддержкой CORS и обработкой OPTIONS запросов
     """
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -180,14 +182,14 @@ def run_otree_with_cors():
     # Now let's initialize oTree itself and get the app instance
     from otree.asgi import app as otree_app
     
-    # Create our own static files app with CORS support
-    # It will skip middleware that uses lock2
+    # Get the original static files app to correctly handle static file lookups
     from otree.common2 import static_files_app as original_static_app
     
-    # Create our own static files app with the same directory configuration but CORS support
+    # Create our own CORS-enabled static files app using the same configuration as the original
+    # Важно: мы наследуемся от OTreeStaticFiles, чтобы сохранить логику поиска файлов
     static_app_with_cors = CORSStaticFiles(
-        directory=original_static_app.directory,
-        packages=original_static_app.packages
+        directory='_static', 
+        packages=['otree'] + otree.settings.OTREE_APPS
     )
     
     # Create a root application that routes requests appropriately
