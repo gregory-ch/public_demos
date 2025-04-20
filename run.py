@@ -165,13 +165,14 @@ def run_otree_with_cors():
     # Now let oTree initialize itself with our patches in place
     logger.info("Starting oTree with CORS support at initialization time")
     
-    # Run the standard oTree command
+    # Get the port from the environment
     port = os.environ.get('PORT', '8000')
-    logger.info(f"Starting oTree prodserver on port {port}")
+    logger.info(f"Starting oTree server on port {port}")
     
-    # Use otree's built-in command handler
+    # Use otree's built-in command handler - для oTree 5+
     from otree.main import execute_from_command_line
-    sys.argv = ['otree', 'prodserver', port]
+    # Используем prodserver1of2 для oTree 5+ с портом как опцией
+    sys.argv = ['otree', 'prodserver1of2', '--port', port]
     execute_from_command_line()
 
 if __name__ == "__main__":
