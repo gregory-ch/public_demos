@@ -98,6 +98,23 @@ class RootApp:
             return await self.otree_app(scope, receive, send)
             
         path = scope["path"]
+        method = scope.get("method", "")
+        
+        # Перехватываем OPTIONS запросы к любым путям, включая корневой
+        if method == "OPTIONS":
+            logger.info(f"RootApp: Handling OPTIONS request for {path}")
+            response = Response(
+                content="",
+                status_code=200,
+                headers={
+                    "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Max-Age": "1728000",
+                }
+            )
+            return await response(scope, receive, send)
         
         # Перенаправляем запросы к статическим файлам на наше отдельное приложение,
         # минуя middleware oTree с блокировками
