@@ -47,7 +47,7 @@ class CORSStaticFiles(OTreeStaticFiles):
                 headers={
                     "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
                     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Headers": "X-CSRFToken, X-Requested-With, Content-Type, Accept",
                     "Access-Control-Allow-Credentials": "true",
                     "Access-Control-Max-Age": "1728000",
                     "Access-Control-Expose-Headers": "Allow",
@@ -64,7 +64,7 @@ class CORSStaticFiles(OTreeStaticFiles):
                 cors_headers = [
                     (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
                     (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                    (b"access-control-allow-headers", b"*"),
+                    (b"access-control-allow-headers", b"X-CSRFToken, X-Requested-With, Content-Type, Accept"),
                     (b"access-control-allow-credentials", b"true"),
                     (b"access-control-expose-headers", b"Allow"),
                 ]
@@ -111,7 +111,7 @@ class RootApp:
                 headers={
                     "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
                     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Headers": "X-CSRFToken, X-Requested-With, Content-Type, Accept",
                     "Access-Control-Allow-Credentials": "true",
                     "Access-Control-Max-Age": "1728000",
                     "Access-Control-Expose-Headers": "Allow",
@@ -137,7 +137,7 @@ class RootApp:
                 cors_headers = [
                     (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
                     (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                    (b"access-control-allow-headers", b"*"),
+                    (b"access-control-allow-headers", b"X-CSRFToken, X-Requested-With, Content-Type, Accept"),
                     (b"access-control-allow-credentials", b"true"),
                     (b"access-control-expose-headers", b"Allow"),
                 ]
@@ -182,7 +182,7 @@ def run_otree_with_cors():
                     headers={
                         "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
                         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                        "Access-Control-Allow-Headers": "*",
+                        "Access-Control-Allow-Headers": "X-CSRFToken, X-Requested-With, Content-Type, Accept",
                         "Access-Control-Allow-Credentials": "true",
                         "Access-Control-Max-Age": "1728000",
                         "Access-Control-Expose-Headers": "Allow",
@@ -199,7 +199,7 @@ def run_otree_with_cors():
                     cors_headers = [
                         (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
                         (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                        (b"access-control-allow-headers", b"*"),
+                        (b"access-control-allow-headers", b"X-CSRFToken, X-Requested-With, Content-Type, Accept"),
                         (b"access-control-allow-credentials", b"true"),
                         (b"access-control-expose-headers", b"Allow"),
                     ]
@@ -249,7 +249,7 @@ def run_otree_with_cors():
                 headers={
                     "Access-Control-Allow-Origin": CORS_ALLOW_ORIGIN,
                     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Headers": "X-CSRFToken, X-Requested-With, Content-Type, Accept",
                     "Access-Control-Allow-Credentials": "true",
                     "Access-Control-Max-Age": "1728000",
                     "Access-Control-Expose-Headers": "Allow",
@@ -266,7 +266,7 @@ def run_otree_with_cors():
                 cors_headers = [
                     (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
                     (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
-                    (b"access-control-allow-headers", b"*"),
+                    (b"access-control-allow-headers", b"X-CSRFToken, X-Requested-With, Content-Type, Accept"),
                     (b"access-control-allow-credentials", b"true"),
                     (b"access-control-expose-headers", b"Allow"),
                 ]
