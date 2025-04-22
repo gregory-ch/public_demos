@@ -50,6 +50,7 @@ class CORSStaticFiles(OTreeStaticFiles):
                     "Access-Control-Allow-Headers": "*",
                     "Access-Control-Allow-Credentials": "true",
                     "Access-Control-Max-Age": "1728000",
+                    "Access-Control-Expose-Headers": "Allow",
                 }
             )
             return await response(scope, receive, send)
@@ -65,6 +66,7 @@ class CORSStaticFiles(OTreeStaticFiles):
                     (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
                     (b"access-control-allow-headers", b"*"),
                     (b"access-control-allow-credentials", b"true"),
+                    (b"access-control-expose-headers", b"Allow"),
                 ]
                 
                 # Add or replace headers
@@ -112,6 +114,7 @@ class RootApp:
                     "Access-Control-Allow-Headers": "*",
                     "Access-Control-Allow-Credentials": "true",
                     "Access-Control-Max-Age": "1728000",
+                    "Access-Control-Expose-Headers": "Allow",
                 }
             )
             return await response(scope, receive, send)
@@ -161,21 +164,23 @@ def run_otree_with_cors():
                         "Access-Control-Allow-Headers": "*",
                         "Access-Control-Allow-Credentials": "true",
                         "Access-Control-Max-Age": "1728000",
+                        "Access-Control-Expose-Headers": "Allow",
                     }
                 )
                 return await response(scope, receive, send)
             
             # For regular requests, add CORS headers to the response
             async def send_with_cors(message):
-                if message["type"] == "http.response.start" and not path.startswith('/static/'):
+                if message["type"] == "http.response.start":
                     headers = list(message.get("headers", []))
-                    
+                    # and not path.startswith('/static/'):
                     # Add CORS headers
                     cors_headers = [
                         (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
                         (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
                         (b"access-control-allow-headers", b"*"),
                         (b"access-control-allow-credentials", b"true"),
+                        (b"access-control-expose-headers", b"Allow"),
                     ]
                     
                     # Add or replace headers
@@ -226,6 +231,7 @@ def run_otree_with_cors():
                     "Access-Control-Allow-Headers": "*",
                     "Access-Control-Allow-Credentials": "true",
                     "Access-Control-Max-Age": "1728000",
+                    "Access-Control-Expose-Headers": "Allow",
                 }
             )
             return await response(scope, receive, send)
@@ -241,6 +247,7 @@ def run_otree_with_cors():
                     (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
                     (b"access-control-allow-headers", b"*"),
                     (b"access-control-allow-credentials", b"true"),
+                    (b"access-control-expose-headers", b"Allow"),
                 ]
                 
                 # Add or replace headers
