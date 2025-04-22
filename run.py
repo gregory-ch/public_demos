@@ -128,9 +128,30 @@ class RootApp:
             modified_scope = dict(scope)
             modified_scope["path"] = path[7:]  # Remove '/static/' prefix
             return await self.static_app(modified_scope, receive, send)
-        
-        # Все остальные запросы идут к основному приложению oTree
-        return await self.otree_app(scope, receive, send)
+        # # Все остальные запросы идут к основному приложению oTree
+        # return await self.otree_app(scope, receive, send)
+        # 3) для всех остальных (GET /demo/dsst и т.д.):
+        async def send_with_cors(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                cors_headers = [
+                    (b"access-control-allow-origin", CORS_ALLOW_ORIGIN.encode()),
+                    (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS"),
+                    (b"access-control-allow-headers", b"*"),
+                    (b"access-control-allow-credentials", b"true"),
+                    (b"access-control-expose-headers", b"Allow"),
+                ]
+                for new_header in cors_headers:
+                    for i, (name, _) in enumerate(headers):
+                        if name.lower() == new_header[0].lower():
+                            headers[i] = new_header
+                            break
+                    else:
+                        headers.append(new_header)
+                message["headers"] = headers
+            await send(message)
+
+        return await self.otree_app(scope, receive, send_with_cors)
 
 def run_otree_with_cors():
     """
